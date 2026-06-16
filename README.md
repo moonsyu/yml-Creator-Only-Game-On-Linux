@@ -50,6 +50,22 @@ npm run build
 npm run dist:win:portable
 ```
 
+## 생성된 YML 실행 방법
+우분투 및 리눅스 서버에서 만들어진 `docker-compose.yml` 파일을 실행하는 과정입니다. 모든 명령은 해당 yml 파일이 있는 경로에서 입력해 주세요.
+
+서버에 Docker가 없다면 먼저 Docker 환경을 구축해야 합니다.
+
+```bash
+sudo apt update
+sudo apt upgrade -y
+sudo apt install -y docker-compose
+cd /path/to/generated-compose-folder
+docker-compose up -d
+docker logs -f palworld-server
+```
+
+로그를 띄우는 명령어는 앱에서 지정하는 기본 컨테이너 이름인 `palworld-server`를 바탕으로 작성했습니다.
+
 ## 저장 데이터
 앱에서 지정한 설정값은 수동 저장 기능을 통해 로컬 시스템에 보존할 수 있습니다. 로컬에 저장해두면 앱을 껐다 켜도 저장된 설정을 불러와 사용할 수 있습니다.
 
