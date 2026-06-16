@@ -3,7 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 const STORAGE_CHANNELS = Object.freeze({
   load: 'pal-storage:load',
   save: 'pal-storage:save',
-  reset: 'pal-storage:reset'
+  reset: 'pal-storage:reset',
+  exportYml: 'pal-storage:export-yml'
 });
 
 function requirePlainObject(value) {
@@ -21,7 +22,13 @@ const desktopBridge = Object.freeze({
     requirePlainObject(payload);
     return ipcRenderer.invoke(STORAGE_CHANNELS.save, payload);
   },
-  resetSavedData: () => ipcRenderer.invoke(STORAGE_CHANNELS.reset)
+  resetSavedData: () => ipcRenderer.invoke(STORAGE_CHANNELS.reset),
+  exportYml: (content) => {
+    if (typeof content !== 'string') {
+      throw new TypeError('Content must be a string');
+    }
+    return ipcRenderer.invoke(STORAGE_CHANNELS.exportYml, content);
+  }
 });
 
 contextBridge.exposeInMainWorld('palServerDesktop', desktopBridge);

@@ -292,6 +292,34 @@ function registerStorageIpcHandlers() {
     assertAllowedIpcSender(event);
     return resetSavedData();
   });
+  ipcMain.handle('pal-storage:export-yml', async (event, content) => {
+    assertAllowedIpcSender(event);
+    if (typeof content !== 'string') {
+      return { success: false, error: 'Invalid content type' };
+    }
+    if (Buffer.byteLength(content, 'utf8') > MAX_YAML_BYTES) {
+      return { success: false, error: 'Content size exceeds limit' };
+    }
+    
+    const { dialog, BrowserWindow } = require('electron');
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    
+    try {
+      const { filePath } = await dialog.showSaveDialog(browserWindow, {
+        title: 'YML 파일 저장',
+        defaultPath: 'docker-compose.yml',
+        filters: [{ name: 'YAML', extensions: ['yml', 'yaml'] }]
+      });
+      
+      if (filePath) {
+        await fs.writeFile(filePath, content, 'utf8');
+        return { success: true, filePath };
+      }
+      return { success: false, canceled: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 function isAllowedAppNavigation(navigationUrl, appIndexUrl) {
