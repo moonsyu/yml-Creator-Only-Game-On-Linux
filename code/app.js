@@ -520,6 +520,7 @@ function init() {
     setupConnectionListeners();
     setupOptionsListeners();
     setupVolumeAndGlobalListeners();
+    setupDownloadListener();
     updateLocalStorageUI();
     setupLocalStorageListeners();
     updateCreatorUI();
@@ -595,6 +596,62 @@ function setupVolumeAndGlobalListeners() {
             updateActionBars();
         });
     }
+}
+
+function setupDownloadListener() {
+    const btnDownload = document.getElementById('btn-download-yml');
+    const statusText = document.getElementById('download-status');
+    if (!btnDownload) return;
+
+    btnDownload.addEventListener('click', async () => {
+        const outElem = document.getElementById('yml-output');
+        const yamlContent = outElem ? outElem.textContent : '';
+        if (!yamlContent) {
+            if (statusText) {
+                statusText.textContent = 'YML 내용이 없습니다.';
+                statusText.style.color = 'var(--danger)';
+            }
+            return;
+        }
+
+        try {
+            if (window.palServerDesktop && typeof window.palServerDesktop.exportYml === 'function') {
+                const result = await window.palServerDesktop.exportYml(yamlContent);
+                if (result.success) {
+                    if (statusText) {
+                        statusText.textContent = '저장되었습니다.';
+                        statusText.style.color = 'var(--success)';
+                        setTimeout(() => statusText.textContent = '', 3000);
+                    }
+                } else if (!result.canceled) {
+                    if (statusText) {
+                        statusText.textContent = '저장 실패: ' + (result.error || '알 수 없는 오류');
+                        statusText.style.color = 'var(--danger)';
+                    }
+                }
+            } else {
+                const blob = new Blob([yamlContent], { type: 'text/yaml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'docker-compose.yml';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                if (statusText) {
+                    statusText.textContent = '다운로드가 시작되었습니다.';
+                    statusText.style.color = 'var(--success)';
+                    setTimeout(() => statusText.textContent = '', 3000);
+                }
+            }
+        } catch (e) {
+            if (statusText) {
+                statusText.textContent = '오류 발생: ' + e.message;
+                statusText.style.color = 'var(--danger)';
+            }
+        }
+    });
 }
 
 function setupEventListeners() {
