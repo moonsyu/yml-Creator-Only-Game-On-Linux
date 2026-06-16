@@ -1,7 +1,7 @@
 {
   "name": "pal-server-yml-generator",
   "productName": "팰월드 서버 YML 생성기",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "팰월드 서버 Docker Compose YML 데스크톱 생성기",
   "private": true,
   "main": "main.js",
