@@ -74,9 +74,11 @@
                     <div class="form-divider" style="margin: var(--spacing-lg) 0;"></div>
                 </div>
 
-                <div class="global-actions">
+                <div class="global-actions" style="gap: var(--spacing-sm);">
+                    <button type="button" id="btn-download-yml" class="btn btn-primary">YML 다운로드</button>
                     <button type="button" id="btn-reset-all" class="btn btn-danger">전체 초기화</button>
                 </div>
+                <p id="download-status" class="helper-text" style="text-align: right; margin-top: -var(--spacing-md); margin-bottom: var(--spacing-lg); min-height: 1.2em;"></p>
 
                 <div class="yml-output-container">
                     <pre><code id="yml-output"></code></pre>
