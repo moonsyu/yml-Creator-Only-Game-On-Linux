@@ -11,13 +11,16 @@
 
 ## 다운로드/실행
 Windows 환경에서 바로 실행할 수 있는 파일은 GitHub **Releases** 페이지에서 받을 수 있습니다.
-- **릴리스 페이지**: https://github.com/moonsyu/yml-Creator-Only-Game-On-Linux/releases/tag/v0.1.0
+- **릴리스 페이지**: https://github.com/moonsyu/yml-Creator-Only-Game-On-Linux/releases/tag/v0.1.1
 
 - **웹 버전**: https://moonsyu.github.io/yml-Creator-Only-Game-On-Linux/
   - 브라우저에서 바로 YAML 생성이 가능하며, Electron 브리지 없이 동작하므로 `로컬 저장`처럼 데스크톱 전용 기능은 동작하지 않을 수 있습니다.
+  - 웹에서는 `YML 다운로드` 버튼으로 생성된 YAML을 바로 파일로 내려받을 수 있습니다.
 
-- `palworld-yml-generator-v0.1.0-portable.exe`: 설치 없이 바로 켤 수 있는 단일 포터블 실행 파일
-- `palworld-yml-generator-v0.1.0-win-unpacked.zip`: 실행에 필요한 런타임 파일이 포함된 압축 파일
+- **데스크톱 버전**: `YML 다운로드` 버튼으로 생성된 YAML을 원하는 위치에 직접 저장할 수 있습니다.
+
+- `palworld-yml-generator-v0.1.1-portable.exe`: 설치 없이 바로 켤 수 있는 단일 포터블 실행 파일
+- `palworld-yml-generator-v0.1.1-win-unpacked.zip`: 실행에 필요한 런타임 파일이 포함된 압축 파일
 
 *참고: 코드는 Ubuntu 24.04 LTS에서 작성했지만, 일반 사용자 편의를 위해 Windows 빌드 버전을 릴리스로 제공합니다.*
 
