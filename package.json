@@ -1,0 +1,48 @@
+{
+  "name": "pal-server-yml-generator",
+  "productName": "팰월드 서버 YML 생성기",
+  "version": "0.1.0",
+  "description": "팰월드 서버 Docker Compose YML 데스크톱 생성기",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "node -e \"const cp=require('node:child_process');const path=require('node:path');const root=path.dirname(process.env.npm_package_json||path.join(process.env.INIT_CWD||process.cwd(),'package.json'));const electron=require(path.join(root,'node_modules','electron'));const extraArgs=process.argv.slice(1);const result=cp.spawnSync(electron,extraArgs.length>0?extraArgs:[root],{stdio:'inherit'});if(result.error)throw result.error;process.exit(result.status===null?1:result.status);\" --",
+    "check": "node -e \"const cp=require('node:child_process');const path=require('node:path');const root=path.dirname(process.env.npm_package_json||path.join(process.env.INIT_CWD||process.cwd(),'package.json'));for(const file of ['main.js','preload.js','app.js'])cp.execFileSync(process.execPath,['--check',path.join(root,file)],{stdio:'inherit'});\"",
+    "build": "node -e \"const cp=require('node:child_process');const path=require('node:path');const root=path.dirname(process.env.npm_package_json||path.join(process.env.INIT_CWD||process.cwd(),'package.json'));for(const file of ['main.js','preload.js','app.js'])cp.execFileSync(process.execPath,['--check',path.join(root,file)],{stdio:'inherit'});\"",
+    "pack:win": "node -e \"const cp=require('node:child_process');const path=require('node:path');const root=path.dirname(process.env.npm_package_json||path.join(process.env.INIT_CWD||process.cwd(),'package.json'));const builder=path.join(root,'node_modules','electron-builder','out','cli','cli.js');const result=cp.spawnSync(process.execPath,[builder,'--projectDir',root,'--win','--dir','--publish','never'],{stdio:'inherit',cwd:root});if(result.error)throw result.error;process.exit(result.status===null?1:result.status);\"",
+    "dist:win": "node -e \"const cp=require('node:child_process');const path=require('node:path');const root=path.dirname(process.env.npm_package_json||path.join(process.env.INIT_CWD||process.cwd(),'package.json'));const builder=path.join(root,'node_modules','electron-builder','out','cli','cli.js');const result=cp.spawnSync(process.execPath,[builder,'--projectDir',root,'--win','portable','--publish','never'],{stdio:'inherit',cwd:root});if(result.error)throw result.error;process.exit(result.status===null?1:result.status);\"",
+    "dist:win:portable": "node -e \"const cp=require('node:child_process');const path=require('node:path');const root=path.dirname(process.env.npm_package_json||path.join(process.env.INIT_CWD||process.cwd(),'package.json'));const builder=path.join(root,'node_modules','electron-builder','out','cli','cli.js');const result=cp.spawnSync(process.execPath,[builder,'--projectDir',root,'--win','portable','--publish','never'],{stdio:'inherit',cwd:root});if(result.error)throw result.error;process.exit(result.status===null?1:result.status);\""
+  },
+  "devDependencies": {
+    "electron": "^42.4.0",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.jms.palserver.ymlgenerator",
+    "productName": "팰월드 서버 YML 생성기",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "styles.css",
+      "app.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
+  }
+}
