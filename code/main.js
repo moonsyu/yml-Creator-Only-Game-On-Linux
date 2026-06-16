@@ -297,7 +297,13 @@ function registerStorageIpcHandlers() {
     if (typeof content !== 'string') {
       return { success: false, error: 'Invalid content type' };
     }
-    if (Buffer.byteLength(content, 'utf8') > MAX_YAML_BYTES) {
+
+    let finalContent = content;
+    if (!finalContent.startsWith('\uFEFF')) {
+      finalContent = '\uFEFF' + finalContent;
+    }
+
+    if (Buffer.byteLength(finalContent, 'utf8') > MAX_YAML_BYTES) {
       return { success: false, error: 'Content size exceeds limit' };
     }
     
@@ -312,7 +318,7 @@ function registerStorageIpcHandlers() {
       });
       
       if (filePath) {
-        await fs.writeFile(filePath, content, 'utf8');
+        await fs.writeFile(filePath, finalContent, 'utf8');
         return { success: true, filePath };
       }
       return { success: false, canceled: true };
