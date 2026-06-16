@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>팰월드 서버 YML 생성기</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>팰월드 서버 YML 생성기</h1>
+            <p>손쉽게 Docker Compose 설정 파일을 구성하세요.</p>
+        </header>
+
+        <main class="app-main">
+            <section class="section-container" id="section-creator">
+                <h2>1. Docker 제작자 선택</h2>
+                <p class="section-desc">사용할 Docker 이미지의 제작자를 선택해주세요.</p>
+                
+                <div class="creator-cards">
+                    <button class="creator-card active" data-creator="thijsvanloef" aria-label="thijsvanloef 선택" aria-pressed="true">
+                        <div class="card-icon">🚀</div>
+                        <div class="card-content">
+                            <h3>thijsvanloef</h3>
+                            <p>thijsvanloef/palworld-server-docker</p>
+                            <span class="badge">추천</span>
+                        </div>
+                    </button>
+                    <button class="creator-card" data-creator="jammsen" aria-label="jammsen 선택" aria-pressed="false">
+                        <div class="card-icon">⚡</div>
+                        <div class="card-content">
+                            <h3>jammsen</h3>
+                            <p>jammsen/palworld-dedicated-server</p>
+                        </div>
+                    </button>
+                </div>
+                <div class="action-bar" id="action-creator"></div>
+            </section>
+
+            <section class="section-container" id="section-connection">
+            </section>
+
+            <section class="section-container placeholder-section" id="section-options">
+                <h2>3. 팰 서버 옵션</h2>
+            </section>
+
+            <section class="section-container" id="section-actions">
+                <h2>4. YML 미리보기</h2>
+                
+                <div class="volume-settings">
+                    <div class="form-group">
+                        <label for="volumeHostPath">서버 데이터 폴더 (volume)</label>
+                        <input type="text" id="volumeHostPath" class="text-input" placeholder="./pal_server">
+                        <p class="helper-text">실행 위치 기준 pal_server 폴더가 컨테이너 /palworld에 연결됨.</p>
+                    </div>
+                    <div class="action-bar" id="action-volume"></div>
+                </div>
+
+                <div class="form-divider" style="margin: var(--spacing-lg) 0;"></div>
+
+                <div class="local-storage-area" id="local-storage-area">
+                    <div class="form-group">
+                        <label>로컬 저장소 (데스크톱 전용)</label>
+                        <p class="helper-text">현재 작성한 설정을 로컬 데스크톱에 저장하거나 불러올 수 있습니다.</p>
+                        <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm); flex-wrap: wrap;">
+                            <button type="button" id="btn-local-save" class="btn btn-primary">로컬 저장</button>
+                            <button type="button" id="btn-local-load" class="btn btn-secondary">저장값 불러오기</button>
+                            <button type="button" id="btn-local-reset" class="btn btn-danger">저장값 삭제</button>
+                        </div>
+                        <p id="local-storage-status" class="helper-text" style="margin-top: var(--spacing-sm); min-height: 1.2em;"></p>
+                    </div>
+                    <div class="form-divider" style="margin: var(--spacing-lg) 0;"></div>
+                </div>
+
+                <div class="global-actions">
+                    <button type="button" id="btn-reset-all" class="btn btn-danger">전체 초기화</button>
+                </div>
+
+                <div class="yml-output-container">
+                    <pre><code id="yml-output"></code></pre>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="app.js" defer></script>
+</body>
+</html>
