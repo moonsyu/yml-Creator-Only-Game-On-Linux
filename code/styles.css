@@ -176,7 +176,7 @@ p {
     box-shadow: var(--shadow-elevated);
     transition: var(--transition-smooth);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .section-container::before {
@@ -642,6 +642,86 @@ label {
 .placeholder-section h2::before {
     background: var(--border-color);
     box-shadow: none;
+}
+
+/* Hint Tooltip Styles */
+.hint-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+
+.hint-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bg-surface-hover);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    padding: 0;
+    line-height: 1;
+    outline: none;
+}
+
+.hint-icon:hover, .hint-icon:focus, .hint-wrapper.active .hint-icon {
+    background: var(--accent-blue);
+    color: var(--bg-base);
+    border-color: var(--accent-blue-hover);
+    box-shadow: 0 0 0 2px var(--accent-blue-glow);
+}
+
+.hint-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: var(--bg-panel);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    white-space: normal;
+    width: max-content;
+    max-width: 250px;
+    text-align: center;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: var(--transition-fast);
+    box-shadow: var(--shadow-elevated);
+    font-weight: normal;
+    line-height: 1.4;
+}
+
+.hint-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--border-color) transparent transparent transparent;
+}
+
+.hint-wrapper:hover .hint-tooltip,
+.hint-icon:focus + .hint-tooltip,
+.hint-wrapper.active .hint-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
 }
 
 /* Responsive adjustments */
