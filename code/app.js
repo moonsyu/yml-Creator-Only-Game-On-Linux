@@ -89,7 +89,7 @@ const defaultDraftState = {
         allowGlobalPalboxImport: false,
         puid: 1000,
         pgid: 1000,
-        timezone: "UTC",
+        timezone: "Asia/Seoul",
         serverDescription: "",
         buildObjectHpRate: 1.0,
         buildObjectDamageRate: 1.0,
@@ -146,10 +146,10 @@ const defaultDraftState = {
         j_logFormatType: "Text",
         j_backupAnnounceMessagesEnabled: true,
         j_restartDebugOverride: false,
-        j_rconPlayerDetection: true,
-        j_rconPlayerDebug: false,
-        j_rconPlayerDetectionStartupDelay: 60,
-        j_rconPlayerDetectionCheckInterval: 15,
+        j_playerDetectionEnabled: true,
+        j_playerDetectionDebug: false,
+        j_playerDetectionStartupDelay: 60,
+        j_playerDetectionCheckInterval: 15,
         j_serverSettingsMode: "auto",
         j_customScriptEnabled: false,
         j_customScriptPath: "/palworld/scripts/custom_script.sh",
@@ -160,12 +160,13 @@ const defaultDraftState = {
         j_webhookInfoTitle: "Info",
         j_webhookInfoDescription: "This is an info message",
         j_webhookInfoColor: "2829617",
-        j_webhookInstallTitle: "Installing",
-        j_webhookInstallDescription: "Server is installing / updating",
-        j_webhookInstallColor: "2829617",
-        j_webhookRestartTitle: "Restarting",
-        j_webhookRestartDescription: "Server is restarting",
-        j_webhookRestartColor: "16753920",
+        j_webhookInstallTitle: "Installing server",
+        j_webhookInstallDescription: "Server is being installed",
+        j_webhookInstallColor: "2849520",
+        j_webhookRestartTitle: "Automatic restart",
+        j_webhookRestartDelayedDescription: "The automatic gameserver restart has been triggered, if the server has still players, restart will be in 15 minutes",
+        j_webhookRestartNowDescription: "The gameserver is empty, restarting now",
+        j_webhookRestartColor: "15593515",
         j_webhookStartTitle: "Starting",
         j_webhookStartDescription: "Server is starting",
         j_webhookStartColor: "65280",
@@ -197,7 +198,7 @@ const state = {
 const OPTIONS_SCHEMA = {
     common: [
         { key: 'players', label: '최대 플레이어 수', envT: 'PLAYERS', envJ: 'MAX_PLAYERS', type: 'number', min: 1, max: 32, step: 1 },
-        { key: 'difficulty', label: '난이도', envT: 'DIFFICULTY', envJ: 'DIFFICULTY', type: 'text', helper: 'None, Normal, Difficult' },
+        { key: 'difficulty', label: '난이도', envT: 'DIFFICULTY', envJ: 'DIFFICULTY', type: 'text', helper: '난이도를 설정합니다. (사용 가능 값: None, Normal, Difficult)' },
         { key: 'expRate', label: '경험치 배율', envT: 'EXP_RATE', envJ: 'EXP_RATE', type: 'number', min: 0.1, max: 20, step: 0.1 },
         { key: 'palCaptureRate', label: '팰 포획 배율', envT: 'PAL_CAPTURE_RATE', envJ: 'PAL_CAPTURE_RATE', type: 'number', min: 0.1, max: 10, step: 0.1 },
         { key: 'palSpawnNumRate', label: '팰 출현 배율', envT: 'PAL_SPAWN_NUM_RATE', envJ: 'PAL_SPAWN_NUM_RATE', type: 'number', min: 0.1, max: 5, step: 0.1 },
@@ -214,14 +215,14 @@ const OPTIONS_SCHEMA = {
         { key: 'dropItemMaxNum', label: '드롭 아이템 최대 수', envT: 'DROP_ITEM_MAX_NUM', envJ: 'DROP_ITEM_MAX_NUM', type: 'number', min: 0, max: 10000, step: 100 },
         { key: 'baseCampWorkerMaxNum', label: '거점 작업 팰 수', envT: 'BASE_CAMP_WORKER_MAX_NUM', envJ: 'BASE_CAMP_WORKER_MAXNUM', type: 'number', min: 1, max: 50, step: 1 },
         { key: 'guildPlayerMaxNum', label: '길드 최대 인원', envT: 'GUILD_PLAYER_MAX_NUM', envJ: 'GUILD_PLAYER_MAX_NUM', type: 'number', min: 1, max: 100, step: 1 },
-        { key: 'deathPenalty', label: '사망 패널티', envT: 'DEATH_PENALTY', envJ: 'DEATH_PENALTY', type: 'text', helper: 'None, Item, ItemAndEquipment, All' },
+        { key: 'deathPenalty', label: '사망 패널티', envT: 'DEATH_PENALTY', envJ: 'DEATH_PENALTY', type: 'text', helper: '사망 패널티를 설정합니다. (사용 가능 값: None, Item, ItemAndEquipment, All)' },
         { key: 'crossplayPlatforms', label: '크로스플레이 플랫폼', envT: 'CROSSPLAY_PLATFORMS', envJ: 'CROSSPLAY_PLATFORMS', type: 'text' },
         { key: 'useAuth', label: '서버 인증 사용', envT: 'USEAUTH', envJ: 'USEAUTH', type: 'boolean' },
         { key: 'isPvp', label: 'PVP 사용', envT: 'IS_PVP', envJ: 'IS_PVP', type: 'boolean' },
         { key: 'enableFriendlyFire', label: '아군 피해 허용', envT: 'ENABLE_FRIENDLY_FIRE', envJ: 'ENABLE_FRIENDLY_FIRE', type: 'boolean' },
         { key: 'enableInvaderEnemy', label: '침입 이벤트 허용', envT: 'ENABLE_INVADER_ENEMY', envJ: 'ENABLE_INVADER_ENEMY', type: 'boolean' },
         { key: 'enableFastTravel', label: '빠른 이동 허용', envT: 'ENABLE_FAST_TRAVEL', envJ: 'ENABLE_FAST_TRAVEL', type: 'boolean' },
-        { key: 'randomizerType', label: '랜더마이저 유형', envT: 'RANDOMIZER_TYPE', envJ: 'RANDOMIZER_TYPE', type: 'text', helper: 'None 등' },
+        { key: 'randomizerType', label: '랜더마이저 유형', envT: 'RANDOMIZER_TYPE', envJ: 'RANDOMIZER_TYPE', type: 'text', helper: '랜더마이저 유형을 설정합니다. (사용 가능 값: None 등)' },
         { key: 'randomizerSeed', label: '랜더마이저 시드', envT: 'RANDOMIZER_SEED', envJ: 'RANDOMIZER_SEED', type: 'text' },
         { key: 'isRandomizerPalLevelRandom', label: '랜더마이저 팰 레벨 랜덤', envT: 'IS_RANDOMIZER_PAL_LEVEL_RANDOM', envJ: 'IS_RANDOMIZER_PAL_LEVEL_RANDOM', type: 'boolean' },
         { key: 'playerStomachDecreaseRate', label: '플레이어 배고픔 감소율', envT: 'PLAYER_STOMACH_DECREASE_RATE', envJ: 'PLAYER_STOMACH_DECREASE_RATE', type: 'number', min: 0.1, max: 5, step: 0.1 },
@@ -268,8 +269,8 @@ const OPTIONS_SCHEMA = {
         { key: 'allowGlobalPalboxImport', label: '팰 박스 가져오기 허용', envT: 'ALLOW_GLOBAL_PALBOX_IMPORT', envJ: 'ALLOW_GLOBAL_PALBOX_IMPORT', type: 'boolean' },
         { key: 'puid', label: '컨테이너 사용자 ID', envT: 'PUID', envJ: 'PUID', type: 'number', min: 0, max: 65535, step: 1 },
         { key: 'pgid', label: '컨테이너 그룹 ID', envT: 'PGID', envJ: 'PGID', type: 'number', min: 0, max: 65535, step: 1 },
-        { key: 'timezone', label: '타임존', envT: 'TZ', envJ: 'TZ', type: 'text', helper: 'UTC, Asia/Seoul 등' },
-        { key: 'serverDescription', label: '서버 설명', envT: 'SERVER_DESCRIPTION', envJ: 'SERVER_DESCRIPTION', type: 'text' },
+        { key: 'timezone', label: '타임존', envT: 'TZ', envJ: 'TZ', type: 'select', options: ['Asia/Seoul', 'UTC', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Singapore', 'Australia/Sydney'], helper: '서버의 타임존(시간대)을 설정합니다. (기본값: Asia/Seoul)' },
+        { key: 'serverDescription', label: '서버 설명', envT: 'SERVER_DESCRIPTION', envJ: 'SERVER_DESCRIPTION', type: 'text', helper: '서버 브라우저에 표시될 서버의 설명(소개글)을 설정합니다.' },
         { key: 'buildObjectHpRate', label: '건축물 HP 비율', envT: 'BUILD_OBJECT_HP_RATE', envJ: 'BUILD_OBJECT_HP_RATE', type: 'number', min: 0.1, max: 5, step: 0.1 },
         { key: 'buildObjectDamageRate', label: '건축물 데미지 비율', envT: 'BUILD_OBJECT_DAMAGE_RATE', envJ: 'BUILD_OBJECT_DAMAGE_RATE', type: 'number', min: 0.1, max: 5, step: 0.1 },
         { key: 'buildObjectDeteriorationDamageRate', label: '건축물 열화 데미지 비율', envT: 'BUILD_OBJECT_DETERIORATION_DAMAGE_RATE', envJ: 'BUILD_OBJECT_DETERIORATION_DAMAGE_RATE', type: 'number', min: 0.1, max: 5, step: 0.1 },
@@ -286,11 +287,11 @@ const OPTIONS_SCHEMA = {
         { key: 't_deleteOldBackups', label: '오래된 백업 삭제', env: 'DELETE_OLD_BACKUPS', type: 'boolean' },
         { key: 't_oldBackupDays', label: '백업 보존 일수', env: 'OLD_BACKUP_DAYS', type: 'number', min: 1, max: 365, step: 1 },
         { key: 't_autoRebootEnabled', label: '자동 재부팅', env: 'AUTO_REBOOT_ENABLED', type: 'boolean' },
-        { key: 't_autoRebootCronExpression', label: '재부팅 스케줄', env: 'AUTO_REBOOT_CRON_EXPRESSION', type: 'text', helper: 'Cron 표현식 (예: 0 0 * * *)' },
+        { key: 't_autoRebootCronExpression', label: '재부팅 스케줄', env: 'AUTO_REBOOT_CRON_EXPRESSION', type: 'text', helper: '재부팅 스케줄을 설정합니다. (형식: Cron 표현식, 예: 0 0 * * *)' },
         { key: 't_autoRebootWarnMinutes', label: '재부팅 경고 분', env: 'AUTO_REBOOT_WARN_MINUTES', type: 'number', min: 1, max: 60, step: 1 },
-        { key: 't_logFormatType', label: '로그 형식', env: 'LOG_FORMAT_TYPE', type: 'text', helper: 'default, logfmt, json 등' },
+        { key: 't_logFormatType', label: '로그 형식', env: 'LOG_FORMAT_TYPE', type: 'text', helper: '로그 형식을 설정합니다. (사용 가능 값: default, logfmt, json 등)' },
         { key: 't_autoUpdateEnabled', label: '자동 업데이트', env: 'AUTO_UPDATE_ENABLED', type: 'boolean' },
-        { key: 't_autoUpdateCronExpression', label: '자동 업데이트 스케줄', env: 'AUTO_UPDATE_CRON_EXPRESSION', type: 'text', helper: 'Cron 표현식' },
+        { key: 't_autoUpdateCronExpression', label: '자동 업데이트 스케줄', env: 'AUTO_UPDATE_CRON_EXPRESSION', type: 'text', helper: '자동 업데이트 스케줄을 설정합니다. (형식: Cron 표현식)' },
         { key: 't_autoUpdateWarnMinutes', label: '자동 업데이트 경고 분', env: 'AUTO_UPDATE_WARN_MINUTES', type: 'number', min: 1, max: 60, step: 1 },
         { key: 't_autoRebootEvenIfPlayersOnline', label: '플레이어 접속 중에도 재부팅', env: 'AUTO_REBOOT_EVEN_IF_PLAYERS_ONLINE', type: 'boolean' },
         { key: 't_itemCorruptionMultiplier', label: '아이템 부패 배수', env: 'ITEM_CORRUPTION_MULTIPLIER', type: 'number', min: 0.1, max: 5, step: 0.1 },
@@ -320,42 +321,43 @@ const OPTIONS_SCHEMA = {
         { key: 'j_backupEnabled', label: '자동 백업', env: 'BACKUP_ENABLED', type: 'boolean' },
         { key: 'j_backupRetentionPolicy', label: '오래된 백업 삭제', env: 'BACKUP_RETENTION_POLICY', type: 'boolean' },
         { key: 'j_backupRetentionAmountToKeep', label: '백업 보존 개수', env: 'BACKUP_RETENTION_AMOUNT_TO_KEEP', type: 'number', min: 1, max: 100, step: 1 },
-        { key: 'j_backupCronExpression', label: '백업 스케줄', env: 'BACKUP_CRON_EXPRESSION', type: 'text', helper: 'Cron 표현식' },
+        { key: 'j_backupCronExpression', label: '백업 스케줄', env: 'BACKUP_CRON_EXPRESSION', type: 'text', helper: '백업 스케줄을 설정합니다. (형식: Cron 표현식)' },
         { key: 'j_restartEnabled', label: '자동 재부팅', env: 'RESTART_ENABLED', type: 'boolean' },
-        { key: 'j_restartCronExpression', label: '재부팅 스케줄', env: 'RESTART_CRON_EXPRESSION', type: 'text', helper: 'Cron 표현식' },
-        { key: 'j_netServerMaxTickRate', label: '엔진 틱레이트', env: 'NETSERVERMAXTICKRATE', type: 'number', min: 30, max: 120, step: 1, helper: '권장 범위: 30~120' },
+        { key: 'j_restartCronExpression', label: '재부팅 스케줄', env: 'RESTART_CRON_EXPRESSION', type: 'text', helper: '재부팅 스케줄을 설정합니다. (형식: Cron 표현식)' },
+        { key: 'j_netServerMaxTickRate', label: '엔진 틱레이트', env: 'NETSERVERMAXTICKRATE', type: 'number', min: 30, max: 120, step: 1, helper: '엔진 틱레이트를 설정합니다. (권장 범위: 30~120)' },
         { key: 'j_logFormatType', label: '로그 형식', env: 'LOG_FORMAT_TYPE', type: 'text' },
         { key: 'j_backupAnnounceMessagesEnabled', label: '백업 알림 메시지', env: 'BACKUP_ANNOUNCE_MESSAGES_ENABLED', type: 'boolean' },
-        { key: 'j_restartDebugOverride', label: '재시작 디버그 오버라이드', env: 'RESTART_DEBUG_OVERRIDE', type: 'boolean' },
-        { key: 'j_rconPlayerDetection', label: 'RCON 플레이어 감지', env: 'RCON_PLAYER_DETECTION', type: 'boolean' },
-        { key: 'j_rconPlayerDebug', label: 'RCON 플레이어 디버그', env: 'RCON_PLAYER_DEBUG', type: 'boolean' },
-        { key: 'j_rconPlayerDetectionStartupDelay', label: 'RCON 감지 시작 지연', env: 'RCON_PLAYER_DETECTION_STARTUP_DELAY', type: 'number', min: 1, max: 3600, step: 1 },
-        { key: 'j_rconPlayerDetectionCheckInterval', label: 'RCON 감지 확인 간격', env: 'RCON_PLAYER_DETECTION_CHECK_INTERVAL', type: 'number', min: 1, max: 3600, step: 1 },
-        { key: 'j_serverSettingsMode', label: '서버 설정 모드', env: 'SERVER_SETTINGS_MODE', type: 'text', helper: 'auto, manual, rcononly' },
+        { key: 'j_restartDebugOverride', label: '재시작 디버그 오버라이드', env: 'RESTART_DEBUG_OVERRIDE', type: 'boolean', helper: '재시작 시 디버그 모드를 활성화하여 더 자세한 로그를 출력하도록 설정합니다.' },
+        { key: 'j_playerDetectionEnabled', label: '플레이어 감지 활성화', env: 'PLAYER_DETECTION_ENABLED', type: 'boolean', helper: '플레이어 감지 기능을 켜거나 끄는 설정입니다.' },
+        { key: 'j_playerDetectionDebug', label: '플레이어 감지 디버그', env: 'PLAYER_DETECTION_DEBUG', type: 'boolean', helper: '플레이어 감지 디버깅용 로그 출력을 설정합니다.' },
+        { key: 'j_playerDetectionStartupDelay', label: '감지 시작 지연', env: 'PLAYER_DETECTION_STARTUP_DELAY', type: 'number', min: 1, max: 3600, step: 1, helper: '서버 시작 후 플레이어 감지를 시작할 때까지의 대기 시간(초)을 설정합니다.' },
+        { key: 'j_playerDetectionCheckInterval', label: '감지 확인 간격', env: 'PLAYER_DETECTION_CHECK_INTERVAL', type: 'number', min: 1, max: 3600, step: 1, helper: '플레이어 존재 여부 확인 주기(초)를 설정합니다.' },
+        { key: 'j_serverSettingsMode', label: '서버 설정 모드', env: 'SERVER_SETTINGS_MODE', type: 'text', helper: '서버 설정 모드를 설정합니다. (사용 가능 값: auto, manual, rcononly)' },
         { key: 'j_customScriptEnabled', label: '사용자 지정 스크립트 활성화', env: 'CUSTOM_SCRIPT_ENABLED', type: 'boolean' },
         { key: 'j_customScriptPath', label: '사용자 지정 스크립트 경로', env: 'CUSTOM_SCRIPT_PATH', type: 'text' },
-        { key: 'j_webhookEnabled', label: '웹훅 활성화', env: 'WEBHOOK_ENABLED', type: 'boolean' },
-        { key: 'j_webhookDebugEnabled', label: '웹훅 디버그 활성화', env: 'WEBHOOK_DEBUG_ENABLED', type: 'boolean' },
-        { key: 'j_webhookUrl', label: '웹훅 URL', env: 'WEBHOOK_URL', type: 'text' },
-        { key: 'j_webhookContentTitle', label: '웹훅 콘텐츠 제목', env: 'WEBHOOK_CONTENT_TITLE', type: 'text' },
-        { key: 'j_webhookInfoTitle', label: '웹훅 Info 제목', env: 'WEBHOOK_INFO_TITLE', type: 'text' },
-        { key: 'j_webhookInfoDescription', label: '웹훅 Info 설명', env: 'WEBHOOK_INFO_DESCRIPTION', type: 'text' },
-        { key: 'j_webhookInfoColor', label: '웹훅 Info 색상', env: 'WEBHOOK_INFO_COLOR', type: 'text' },
-        { key: 'j_webhookInstallTitle', label: '웹훅 Install 제목', env: 'WEBHOOK_INSTALL_TITLE', type: 'text' },
-        { key: 'j_webhookInstallDescription', label: '웹훅 Install 설명', env: 'WEBHOOK_INSTALL_DESCRIPTION', type: 'text' },
-        { key: 'j_webhookInstallColor', label: '웹훅 Install 색상', env: 'WEBHOOK_INSTALL_COLOR', type: 'text' },
-        { key: 'j_webhookRestartTitle', label: '웹훅 Restart 제목', env: 'WEBHOOK_RESTART_TITLE', type: 'text' },
-        { key: 'j_webhookRestartDescription', label: '웹훅 Restart 설명', env: 'WEBHOOK_RESTART_DESCRIPTION', type: 'text' },
-        { key: 'j_webhookRestartColor', label: '웹훅 Restart 색상', env: 'WEBHOOK_RESTART_COLOR', type: 'text' },
-        { key: 'j_webhookStartTitle', label: '웹훅 Start 제목', env: 'WEBHOOK_START_TITLE', type: 'text' },
-        { key: 'j_webhookStartDescription', label: '웹훅 Start 설명', env: 'WEBHOOK_START_DESCRIPTION', type: 'text' },
-        { key: 'j_webhookStartColor', label: '웹훅 Start 색상', env: 'WEBHOOK_START_COLOR', type: 'text' },
-        { key: 'j_webhookStopTitle', label: '웹훅 Stop 제목', env: 'WEBHOOK_STOP_TITLE', type: 'text' },
-        { key: 'j_webhookStopDescription', label: '웹훅 Stop 설명', env: 'WEBHOOK_STOP_DESCRIPTION', type: 'text' },
-        { key: 'j_webhookStopColor', label: '웹훅 Stop 색상', env: 'WEBHOOK_STOP_COLOR', type: 'text' },
-        { key: 'j_webhookUpdateTitle', label: '웹훅 Update 제목', env: 'WEBHOOK_UPDATE_TITLE', type: 'text' },
-        { key: 'j_webhookUpdateDescription', label: '웹훅 Update 설명', env: 'WEBHOOK_UPDATE_DESCRIPTION', type: 'text' },
-        { key: 'j_webhookUpdateColor', label: '웹훅 Update 색상', env: 'WEBHOOK_UPDATE_COLOR', type: 'text' }
+        { key: 'j_webhookEnabled', label: '웹훅 활성화', env: 'WEBHOOK_ENABLED', type: 'boolean', helper: '웹훅이란 서버 이벤트를 Discord 같은 외부 서비스로 보내는 알림 방식입니다. 이 설정은 웹훅 알림 기능을 켜거나 끄는 설정입니다.' },
+        { key: 'j_webhookDebugEnabled', label: '웹훅 디버그 활성화', env: 'WEBHOOK_DEBUG_ENABLED', type: 'boolean', helper: '웹훅 디버그 로그 출력 여부를 설정합니다.' },
+        { key: 'j_webhookUrl', label: '웹훅 URL', env: 'WEBHOOK_URL', type: 'text', helper: '웹훅 알림을 보낼 대상 주소를 설정합니다.' },
+        { key: 'j_webhookContentTitle', label: '웹훅 콘텐츠 제목', env: 'WEBHOOK_CONTENT_TITLE', type: 'text', helper: '웹훅 알림의 콘텐츠 제목을 설정합니다.' },
+        { key: 'j_webhookInfoTitle', label: '웹훅 Info 제목', env: 'WEBHOOK_INFO_TITLE', type: 'text', helper: '정보(Info) 이벤트 발생 시 웹훅 메시지 제목을 설정합니다.' },
+        { key: 'j_webhookInfoDescription', label: '웹훅 Info 설명', env: 'WEBHOOK_INFO_DESCRIPTION', type: 'text', helper: '정보(Info) 이벤트 발생 시 웹훅 메시지 본문을 설정합니다.' },
+        { key: 'j_webhookInfoColor', label: '웹훅 Info 색상', env: 'WEBHOOK_INFO_COLOR', type: 'text', helper: '정보(Info) 이벤트 발생 시 웹훅 메시지 색상을 설정합니다.' },
+        { key: 'j_webhookInstallTitle', label: '웹훅 설치 제목', env: 'WEBHOOK_INSTALL_TITLE', type: 'text', helper: '서버 설치 이벤트 발생 시 웹훅 메시지 제목을 설정합니다.' },
+        { key: 'j_webhookInstallDescription', label: '웹훅 설치 설명', env: 'WEBHOOK_INSTALL_DESCRIPTION', type: 'text', helper: '서버 설치 이벤트 발생 시 웹훅 메시지 본문을 설정합니다.' },
+        { key: 'j_webhookInstallColor', label: '웹훅 설치 색상', env: 'WEBHOOK_INSTALL_COLOR', type: 'text', helper: '서버 설치 이벤트 발생 시 웹훅 메시지 색상을 설정합니다.' },
+        { key: 'j_webhookRestartTitle', label: '웹훅 재시작 제목', env: 'WEBHOOK_RESTART_TITLE', type: 'text', helper: '서버 재시작 이벤트 발생 시 웹훅 메시지 제목을 설정합니다.' },
+        { key: 'j_webhookRestartDelayedDescription', label: '웹훅 지연 재시작 설명', env: 'WEBHOOK_RESTART_DELAYED_DESCRIPTION', type: 'text', helper: '플레이어가 있을 때의 지연 재시작 웹훅 메시지 본문을 설정합니다.' },
+        { key: 'j_webhookRestartNowDescription', label: '웹훅 즉시 재시작 설명', env: 'WEBHOOK_RESTART_NOW_DESCRIPTION', type: 'text', helper: '플레이어가 없을 때의 즉시 재시작 웹훅 메시지 본문을 설정합니다.' },
+        { key: 'j_webhookRestartColor', label: '웹훅 재시작 색상', env: 'WEBHOOK_RESTART_COLOR', type: 'text', helper: '서버 재시작 이벤트 발생 시 웹훅 메시지 색상을 설정합니다.' },
+        { key: 'j_webhookStartTitle', label: '웹훅 Start 제목', env: 'WEBHOOK_START_TITLE', type: 'text', helper: '서버 시작 이벤트 발생 시 웹훅 메시지 제목을 설정합니다.' },
+        { key: 'j_webhookStartDescription', label: '웹훅 Start 설명', env: 'WEBHOOK_START_DESCRIPTION', type: 'text', helper: '서버 시작 이벤트 발생 시 웹훅 메시지 본문을 설정합니다.' },
+        { key: 'j_webhookStartColor', label: '웹훅 Start 색상', env: 'WEBHOOK_START_COLOR', type: 'text', helper: '서버 시작 이벤트 발생 시 웹훅 메시지 색상을 설정합니다.' },
+        { key: 'j_webhookStopTitle', label: '웹훅 Stop 제목', env: 'WEBHOOK_STOP_TITLE', type: 'text', helper: '서버 정지 이벤트 발생 시 웹훅 메시지 제목을 설정합니다.' },
+        { key: 'j_webhookStopDescription', label: '웹훅 Stop 설명', env: 'WEBHOOK_STOP_DESCRIPTION', type: 'text', helper: '서버 정지 이벤트 발생 시 웹훅 메시지 본문을 설정합니다.' },
+        { key: 'j_webhookStopColor', label: '웹훅 Stop 색상', env: 'WEBHOOK_STOP_COLOR', type: 'text', helper: '서버 정지 이벤트 발생 시 웹훅 메시지 색상을 설정합니다.' },
+        { key: 'j_webhookUpdateTitle', label: '웹훅 Update 제목', env: 'WEBHOOK_UPDATE_TITLE', type: 'text', helper: '서버 업데이트 이벤트 발생 시 웹훅 메시지 제목을 설정합니다.' },
+        { key: 'j_webhookUpdateDescription', label: '웹훅 Update 설명', env: 'WEBHOOK_UPDATE_DESCRIPTION', type: 'text', helper: '서버 업데이트 이벤트 발생 시 웹훅 메시지 본문을 설정합니다.' },
+        { key: 'j_webhookUpdateColor', label: '웹훅 Update 색상', env: 'WEBHOOK_UPDATE_COLOR', type: 'text', helper: '서버 업데이트 이벤트 발생 시 웹훅 메시지 색상을 설정합니다.' }
     ]
 };
 
@@ -370,6 +372,18 @@ function escapeHTML(str) {
             '"': '&quot;'
         }[tag] || tag)
     );
+}
+
+function renderHintIcon(text, labelStr) {
+    if (!text) return '';
+    const safeText = escapeHTML(text);
+    const ariaLabel = labelStr ? escapeHTML(`${labelStr} 도움말`) : '도움말';
+    return `
+        <span class="hint-wrapper">
+            <button type="button" class="hint-icon" aria-label="${ariaLabel}" aria-expanded="false">?</button>
+            <span class="hint-tooltip" role="tooltip">${safeText}</span>
+        </span>
+    `;
 }
 
 const creatorCards = document.querySelectorAll('.creator-card');
@@ -663,6 +677,27 @@ function setupEventListeners() {
             }
         });
     });
+
+    document.addEventListener('click', (e) => {
+        const hintIcon = e.target.closest('.hint-icon');
+        if (hintIcon) {
+            e.preventDefault();
+            e.stopPropagation();
+            const wrapper = hintIcon.closest('.hint-wrapper');
+            const isActive = wrapper.classList.contains('active');
+            
+            document.querySelectorAll('.hint-wrapper.active').forEach(w => w.classList.remove('active'));
+            document.querySelectorAll('.hint-icon').forEach(i => i.setAttribute('aria-expanded', 'false'));
+            
+            if (!isActive) {
+                wrapper.classList.add('active');
+                hintIcon.setAttribute('aria-expanded', 'true');
+            }
+        } else {
+            document.querySelectorAll('.hint-wrapper.active').forEach(w => w.classList.remove('active'));
+            document.querySelectorAll('.hint-icon').forEach(i => i.setAttribute('aria-expanded', 'false'));
+        }
+    });
 }
 
 function setCreator(creatorId) {
@@ -752,18 +787,18 @@ function renderConnectionSettings() {
         
         <div class="form-grid">
             <div class="form-group">
-                <label for="serverName">서버 이름 (SERVER_NAME)</label>
+                <label for="serverName">서버 이름 (SERVER_NAME) ${renderHintIcon('서버 목록에 표시될 이름입니다.', '서버 이름')}</label>
                 <input type="text" id="serverName" data-key="serverName" value="${escapeHTML(conn.serverName)}" class="text-input" placeholder="서버 이름을 입력하세요">
             </div>
 
             <div class="form-group">
-                <label for="serverPassword">서버 접속 비밀번호 (SERVER_PASSWORD)</label>
+                <label for="serverPassword">서버 접속 비밀번호 (SERVER_PASSWORD) ${renderHintIcon('서버에 접속할 때 필요한 비밀번호입니다. 비워두면 공개 서버가 됩니다.', '서버 접속 비밀번호')}</label>
                 <input type="password" id="serverPassword" data-key="serverPassword" value="${escapeHTML(conn.serverPassword)}" class="text-input" placeholder="접속시 필요한 비밀번호">
                 <p class="helper-text">비워두면 비밀번호 없이 접속 가능합니다.</p>
             </div>
 
             <div class="form-group">
-                <label for="adminPassword">관리자 비밀번호 (ADMIN_PASSWORD)</label>
+                <label for="adminPassword">관리자 비밀번호 (ADMIN_PASSWORD) ${renderHintIcon('인게임에서 /AdminPassword 명령어로 관리자 권한을 얻거나 RCON 접속에 사용됩니다.', '관리자 비밀번호')}</label>
                 <input type="password" id="adminPassword" data-key="adminPassword" value="${escapeHTML(conn.adminPassword)}" class="text-input" placeholder="인게임 관리자 비밀번호">
                 <p class="helper-text">RCON 등 관리자 권한 획득에 사용됩니다.</p>
             </div>
@@ -772,7 +807,7 @@ function renderConnectionSettings() {
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>외부 접속 정보 (${isThijs ? 'PUBLIC_IP / PUBLIC_PORT' : 'PUBLIC_IP'})</label>
+                    <label>외부 접속 정보 (${isThijs ? 'PUBLIC_IP / PUBLIC_PORT' : 'PUBLIC_IP'}) ${renderHintIcon('공인 IP를 통해 외부에서 접속할 수 있도록 설정합니다.', '외부 접속 정보')}</label>
                     <div class="toggle-group" role="group" aria-label="외부 접속 활성화">
                         <button type="button" class="toggle-btn ${conn.publicConnection ? 'active' : ''}" data-key="publicConnection" data-val="true" aria-pressed="${conn.publicConnection}">사용</button>
                         <button type="button" class="toggle-btn ${!conn.publicConnection ? 'active' : ''}" data-key="publicConnection" data-val="false" aria-pressed="${!conn.publicConnection}">미사용</button>
@@ -780,11 +815,11 @@ function renderConnectionSettings() {
                 </div>
                 ${conn.publicConnection ? `
                 <div class="sub-form-group">
-                    <label for="publicIp">공인 IP (PUBLIC_IP)</label>
+                    <label for="publicIp">공인 IP (PUBLIC_IP) ${renderHintIcon('외부 접속용 공인 IP 주소입니다.', '공인 IP')}</label>
                     <input type="text" id="publicIp" data-key="publicIp" value="${escapeHTML(conn.publicIp)}" class="text-input" placeholder="예: 123.45.67.89">
 
                     ${isThijs ? `
-                    <label for="publicPort" class="mt-sm">공인 포트 (PUBLIC_PORT)</label>
+                    <label for="publicPort" class="mt-sm">공인 포트 (PUBLIC_PORT) ${renderHintIcon('외부에서 접속할 때 사용하는 포트 번호입니다.', '공인 포트')}</label>
                     ${renderPortControl('publicPort', conn.publicPort)}
                     ` : `<p class="helper-text">Jammsen의 PUBLIC_PORT는 위 게임 포트(PUBLIC_PORT) 필드에서 설정됩니다.</p>`}
                 </div>
@@ -793,7 +828,7 @@ function renderConnectionSettings() {
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>커뮤니티 서버 노출 (${isThijs ? 'COMMUNITY' : 'COMMUNITY_SERVER'})</label>
+                    <label>커뮤니티 서버 노출 (${isThijs ? 'COMMUNITY' : 'COMMUNITY_SERVER'}) ${renderHintIcon('공식 커뮤니티 서버 목록에 이 서버를 표시할지 여부입니다.', '커뮤니티 서버 노출')}</label>
                     <div class="toggle-group" role="group" aria-label="커뮤니티 서버 노출">
                         <button type="button" class="toggle-btn ${conn.community ? 'active' : ''}" data-key="community" data-val="true" aria-pressed="${conn.community}">노출</button>
                         <button type="button" class="toggle-btn ${!conn.community ? 'active' : ''}" data-key="community" data-val="false" aria-pressed="${!conn.community}">비노출</button>
@@ -802,13 +837,13 @@ function renderConnectionSettings() {
             </div>
 
             <div class="form-group">
-                <label for="gamePort">게임 포트 (${isThijs ? 'PORT' : 'PUBLIC_PORT'})</label>
+                <label for="gamePort">게임 포트 (${isThijs ? 'PORT' : 'PUBLIC_PORT'}) ${renderHintIcon('게임 클라이언트가 접속하는 기본 UDP 포트입니다.', '게임 포트')}</label>
                 ${renderPortControl('gamePort', conn.gamePort)}
             </div>
             
             ${isThijs ? `
             <div class="form-group">
-                <label for="queryPort">쿼리 포트 (QUERY_PORT)</label>
+                <label for="queryPort">쿼리 포트 (QUERY_PORT) ${renderHintIcon('서버 상태 조회용 UDP 쿼리 포트입니다.', '쿼리 포트')}</label>
                 ${renderPortControl('queryPort', conn.queryPort)}
             </div>
             ` : ''}
@@ -817,7 +852,7 @@ function renderConnectionSettings() {
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>REST API 사용 (${isThijs ? 'REST_API_ENABLED' : 'RESTAPI_ENABLED'})</label>
+                    <label>REST API 사용 (${isThijs ? 'REST_API_ENABLED' : 'RESTAPI_ENABLED'}) ${renderHintIcon('외부에서 HTTP 요청으로 서버를 관리할 수 있는 REST API 기능을 활성화합니다.', 'REST API 사용')}</label>
                     <div class="toggle-group" role="group" aria-label="REST API 사용">
                         <button type="button" class="toggle-btn ${conn.restApi ? 'active' : ''}" data-key="restApi" data-val="true" aria-pressed="${conn.restApi}">사용</button>
                         <button type="button" class="toggle-btn ${!conn.restApi ? 'active' : ''}" data-key="restApi" data-val="false" aria-pressed="${!conn.restApi}">미사용</button>
@@ -825,7 +860,7 @@ function renderConnectionSettings() {
                 </div>
                 ${conn.restApi ? `
                 <div class="sub-form-group">
-                    <label for="restApiPort">REST API 포트 (${isThijs ? 'REST_API_PORT' : 'RESTAPI_PORT'})</label>
+                    <label for="restApiPort">REST API 포트 (${isThijs ? 'REST_API_PORT' : 'RESTAPI_PORT'}) ${renderHintIcon('REST API 서비스가 사용할 TCP 포트입니다.', 'REST API 포트')}</label>
                     ${renderPortControl('restApiPort', conn.restApiPort)}
                 </div>
                 ` : ''}
@@ -833,7 +868,7 @@ function renderConnectionSettings() {
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>RCON 사용 (RCON_ENABLED)</label>
+                    <label>RCON 사용 (RCON_ENABLED) ${renderHintIcon('RCON 프로토콜을 이용한 원격 서버 관리 기능을 활성화합니다.', 'RCON 사용')}</label>
                     <div class="toggle-group" role="group" aria-label="RCON 사용">
                         <button type="button" class="toggle-btn ${conn.rcon ? 'active' : ''}" data-key="rcon" data-val="true" aria-pressed="${conn.rcon}">사용</button>
                         <button type="button" class="toggle-btn ${!conn.rcon ? 'active' : ''}" data-key="rcon" data-val="false" aria-pressed="${!conn.rcon}">미사용</button>
@@ -841,7 +876,7 @@ function renderConnectionSettings() {
                 </div>
                 ${conn.rcon ? `
                 <div class="sub-form-group">
-                    <label for="rconPort">RCON 포트 (RCON_PORT)</label>
+                    <label for="rconPort">RCON 포트 (RCON_PORT) ${renderHintIcon('RCON 서비스가 사용할 TCP 포트입니다.', 'RCON 포트')}</label>
                     ${renderPortControl('rconPort', conn.rconPort)}
                 </div>
                 ` : ''}
@@ -893,6 +928,39 @@ function renderServerOptions() {
     updateActionBars();
 }
 
+function cronToKorean(cron) {
+    if (!cron || typeof cron !== 'string') return '설정 안 됨';
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length !== 5) return '지원하지 않는 형식이거나 복잡한 Cron 식 (기본 동작 사용)';
+    
+    const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+    
+    if (minute === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return '매시간 마다';
+    }
+    if (minute === '0' && !isNaN(hour) && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return `매일 ${hour}시 마다`;
+    }
+    if (!isNaN(minute) && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return `매시간 ${minute}분 마다`;
+    }
+    if (!isNaN(minute) && !isNaN(hour) && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return `매일 ${hour}시 ${minute}분 마다`;
+    }
+    
+    return '사용자 지정 스케줄 (자세한 주기는 직접 확인 필요)';
+}
+
+function renderSelectControl(key, value, options) {
+    let html = `<select class="text-input option-select" data-key="${escapeHTML(key)}" id="${escapeHTML(key)}">`;
+    options.forEach(o => {
+        const isSelected = (value === o) ? 'selected' : '';
+        html += `<option value="${escapeHTML(o)}" ${isSelected}>${escapeHTML(o)}</option>`;
+    });
+    html += `</select>`;
+    return html;
+}
+
 function renderOptionRow(opt, envName, value) {
     let controlHtml = '';
     
@@ -902,15 +970,29 @@ function renderOptionRow(opt, envName, value) {
         controlHtml = renderBooleanControl(opt.key, value);
     } else if (opt.type === 'text') {
         controlHtml = renderTextControl(opt.key, value);
+    } else if (opt.type === 'select') {
+        controlHtml = renderSelectControl(opt.key, value, opt.options);
     }
+
+    let cronPreviewHtml = '';
+    if (['t_autoRebootCronExpression', 't_autoUpdateCronExpression', 'j_backupCronExpression', 'j_restartCronExpression'].includes(opt.key)) {
+        const koreanPreview = cronToKorean(value);
+        cronPreviewHtml = `<div class="cron-preview-container" style="margin-top: 5px; font-size: 0.9em; color: var(--color-text-muted, #8b949e);">📝 스케줄: <span class="cron-preview-text" id="cron-preview-${opt.key}">${escapeHTML(koreanPreview)}</span></div>`;
+    }
+
+    const hintText = opt.helper ? opt.helper : `${opt.label} 기능을 설정합니다.`;
 
     return `
         <div class="form-group">
             <div class="label-row">
-                <label for="${opt.key}">${escapeHTML(opt.label)} (${escapeHTML(envName)})</label>
+                <label for="${opt.key}">
+                    ${escapeHTML(opt.label)} (${escapeHTML(envName)})
+                    ${renderHintIcon(hintText, opt.label)}
+                </label>
                 ${opt.type === 'boolean' ? controlHtml : ''}
             </div>
             ${opt.type !== 'boolean' ? controlHtml : ''}
+            ${cronPreviewHtml}
             ${opt.helper ? `<p class="helper-text">${escapeHTML(opt.helper)}</p>` : ''}
         </div>
     `;
@@ -976,6 +1058,17 @@ function setupOptionsListeners() {
     container.addEventListener('input', (e) => {
         if (e.target.matches('.option-text')) {
             state.draft.serverOptions[e.target.dataset.key] = e.target.value;
+            if (['t_autoRebootCronExpression', 't_autoUpdateCronExpression', 'j_backupCronExpression', 'j_restartCronExpression'].includes(e.target.dataset.key)) {
+                const previewSpan = document.getElementById(`cron-preview-${e.target.dataset.key}`);
+                if (previewSpan) {
+                    previewSpan.textContent = cronToKorean(e.target.value);
+                }
+            }
+            updateActionBars();
+        }
+        
+        if (e.target.matches('.option-select')) {
+            state.draft.serverOptions[e.target.dataset.key] = e.target.value;
             updateActionBars();
         }
         
@@ -1004,6 +1097,11 @@ function setupOptionsListeners() {
     });
 
     container.addEventListener('change', (e) => {
+        if (e.target.matches('.option-select')) {
+            state.draft.serverOptions[e.target.dataset.key] = e.target.value;
+            updateActionBars();
+        }
+        
         if (e.target.matches('.generic-num-input')) {
             const val = sanitizeGenericNumericValue(e.target.value, e.target.min, e.target.max, e.target.step);
             e.target.value = val;
