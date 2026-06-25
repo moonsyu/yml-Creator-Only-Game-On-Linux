@@ -16,7 +16,7 @@
 
         <main class="app-main">
             <section class="section-container" id="section-creator">
-                <h2>1. Docker 제작자 선택</h2>
+                <h2>1. Docker 제작자 선택 <span class="hint-wrapper"><button type="button" class="hint-icon" aria-label="Docker 제작자 선택 도움말" aria-expanded="false">?</button><span class="hint-tooltip" role="tooltip">사용할 팰월드 서버의 베이스 이미지를 제공하는 제작자를 선택합니다.</span></span></h2>
                 <p class="section-desc">사용할 Docker 이미지의 제작자를 선택해주세요.</p>
                 
                 <div class="creator-cards">
@@ -51,7 +51,7 @@
                 
                 <div class="volume-settings">
                     <div class="form-group">
-                        <label for="volumeHostPath">서버 데이터 폴더 (volume)</label>
+                        <label for="volumeHostPath">서버 데이터 폴더 (volume) <span class="hint-wrapper"><button type="button" class="hint-icon" aria-label="서버 데이터 폴더 도움말" aria-expanded="false">?</button><span class="hint-tooltip" role="tooltip">호스트(서버 운영체제)의 파일 시스템과 도커 컨테이너를 연결하여 데이터가 유지되게 하는 경로입니다.</span></span></label>
                         <input type="text" id="volumeHostPath" class="text-input" placeholder="./pal_server">
                         <p class="helper-text">실행 위치 기준 pal_server 폴더가 컨테이너 /palworld에 연결됨.</p>
                     </div>
@@ -62,7 +62,7 @@
 
                 <div class="local-storage-area" id="local-storage-area">
                     <div class="form-group">
-                        <label>로컬 저장소 (데스크톱 전용)</label>
+                        <label>로컬 저장소 (데스크톱 전용) <span class="hint-wrapper"><button type="button" class="hint-icon" aria-label="로컬 저장소 도움말" aria-expanded="false">?</button><span class="hint-tooltip" role="tooltip">현재 설정한 상태를 앱 내부(로컬)에 저장하여 나중에도 불러올 수 있게 합니다.</span></span></label>
                         <p class="helper-text">현재 작성한 설정을 로컬 데스크톱에 저장하거나 불러올 수 있습니다.</p>
                         <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm); flex-wrap: wrap;">
                             <button type="button" id="btn-local-save" class="btn btn-primary">로컬 저장</button>
@@ -74,9 +74,21 @@
                     <div class="form-divider" style="margin: var(--spacing-lg) 0;"></div>
                 </div>
 
-                <div class="global-actions" style="gap: var(--spacing-sm);">
-                    <button type="button" id="btn-download-yml" class="btn btn-primary">YML 다운로드</button>
-                    <button type="button" id="btn-reset-all" class="btn btn-danger">전체 초기화</button>
+                <div class="global-actions" style="gap: var(--spacing-sm); display: flex; align-items: center; justify-content: flex-end;">
+                    <div style="display: inline-flex; align-items: center;">
+                        <button type="button" id="btn-download-yml" class="btn btn-primary">YML 다운로드</button>
+                        <span class="hint-wrapper" style="margin-left: 8px;">
+                            <button type="button" class="hint-icon" aria-label="YML 다운로드 도움말" aria-expanded="false">?</button>
+                            <span class="hint-tooltip" role="tooltip">작성된 docker-compose.yml 파일을 저장합니다.</span>
+                        </span>
+                    </div>
+                    <div style="display: inline-flex; align-items: center;">
+                        <button type="button" id="btn-reset-all" class="btn btn-danger">전체 초기화</button>
+                        <span class="hint-wrapper" style="margin-left: 8px;">
+                            <button type="button" class="hint-icon" aria-label="전체 초기화 도움말" aria-expanded="false">?</button>
+                            <span class="hint-tooltip" role="tooltip">현재까지 작성한 모든 설정을 기본값으로 되돌립니다.</span>
+                        </span>
+                    </div>
                 </div>
                 <p id="download-status" class="helper-text" style="text-align: right; margin-top: -var(--spacing-md); margin-bottom: var(--spacing-lg); min-height: 1.2em;"></p>
 
