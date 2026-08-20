@@ -427,8 +427,13 @@ const CORE_KEEPER_OPTIONS_SCHEMA = [
             { value: '7', label: 'Lunar New Year (7)' }
         ]
     },
-    { key: 'activateContent', label: '기존 월드 콘텐츠 활성화', env: 'ACTIVATE_CONTENT', type: 'text', helper: '쉼표로 구분합니다. 활성화한 콘텐츠 번들은 다시 비활성화할 수 없습니다.' },
-    { key: 'activateAllContent', label: '모든 기존 월드 콘텐츠 활성화', env: 'ACTIVATE_ALL_CONTENT', type: 'boolean' },
+    {
+        key: 'activateContent',
+        label: '기존 월드 콘텐츠 활성화',
+        env: 'ACTIVATE_CONTENT',
+        type: 'content-bundles',
+        helper: '필요한 콘텐츠를 버튼으로 선택하세요. 월드에 한 번 적용된 콘텐츠는 다시 비활성화할 수 없으므로 먼저 백업하는 것을 권장합니다.'
+    },
     { key: 'puid', label: '컨테이너 사용자 ID', env: 'PUID', type: 'number', min: 0, max: 65535, step: 1 },
     { key: 'pgid', label: '컨테이너 그룹 ID', env: 'PGID', type: 'number', min: 0, max: 65535, step: 1 },
     {
@@ -439,10 +444,54 @@ const CORE_KEEPER_OPTIONS_SCHEMA = [
         options: ['generic', 'rpi3', 'rpi4-pre3', 'rpi5', 'rpi5_16k', 'm1', 'adlink']
     },
     { key: 'useDepotDownloader', label: 'DepotDownloader 사용', env: 'USE_DEPOT_DOWNLOADER', type: 'boolean', helper: '32비트 호환성이 없는 시스템에서 SteamCMD 대신 사용합니다.' },
-    { key: 'modsEnabled', label: 'mod.io 모드 사용', env: 'MODS_ENABLED', type: 'boolean' },
-    { key: 'modioApiKey', label: 'mod.io API 키', env: 'MODIO_API_KEY', type: 'text', sensitive: true },
-    { key: 'modioApiUrl', label: 'mod.io API URL', env: 'MODIO_API_URL', type: 'text', helper: '예: https://u-xxxx.modapi.io/v1' },
-    { key: 'mods', label: '설치할 모드', env: 'MODS', type: 'text', helper: '쉼표로 구분한 mod.io 문자열 ID를 입력합니다. 의존성은 자동 설치되지 않습니다.' }
+    {
+        key: 'modsEnabled',
+        label: 'mod.io 모드 사용',
+        env: 'MODS_ENABLED',
+        type: 'boolean',
+        helper: '아래 링크에서 모드를 찾고 API 키를 발급받은 뒤 모드 사용을 켜세요.',
+        links: [
+            { label: '① Core Keeper 모드 찾기', href: 'https://mod.io/g/corekeeper' },
+            { label: '② mod.io API 키 발급', href: 'https://mod.io/me/access' },
+            { label: '③ 서버 모드 설정 가이드', href: 'https://github.com/escapingnetwork/core-keeper-dedicated#mod-support' }
+        ]
+    },
+    { key: 'modioApiKey', label: 'mod.io API 키', env: 'MODIO_API_KEY', type: 'text', sensitive: true, helper: 'mod.io API 키 발급 페이지에서 생성한 API Key를 입력합니다.' },
+    { key: 'modioApiUrl', label: 'mod.io API URL', env: 'MODIO_API_URL', type: 'text', helper: 'API 키와 함께 표시되는 API 경로를 입력합니다. 예: https://u-xxxx.modapi.io/v1' },
+    { key: 'mods', label: '설치할 모드', env: 'MODS', type: 'text', helper: '모드 페이지 URL의 마지막 문자열 ID를 쉼표로 구분해 입력합니다. 예: core-lib,ck-qol. 의존성은 자동 설치되지 않습니다.' }
+];
+
+const CORE_KEEPER_CONTENT_BUNDLES = [
+    {
+        value: 'GiantCicadaBossDungeon',
+        title: '모래 속 여왕',
+        subtitle: 'Nimruza 보스 던전',
+        description: '시작의 사막에 니므루자 보스와 전용 던전을 추가합니다. 이미 탐험한 사막 일부가 덮어써질 수 있습니다.'
+    },
+    {
+        value: 'NatureBiomeCicadas',
+        title: '여왕의 자손',
+        subtitle: '자연 생물군계 매미',
+        description: '아제오스의 황야에 새로운 매미 적을 추가합니다. 이미 탐험한 황야 일부가 덮어써질 수 있습니다.'
+    },
+    {
+        value: 'GuaranteedOases',
+        title: '오아시스 보장',
+        subtitle: '오아시스와 드롬블',
+        description: '시작의 사막에 오아시스가 최소 몇 곳 생성되도록 보장합니다. 생성 위치의 기존 지형은 덮어써집니다.'
+    },
+    {
+        value: 'BiomeStatues',
+        title: '타이탄 성소',
+        subtitle: '6개의 타이탄 성소',
+        description: '각 진행 구간에 스캐너·소환 아이템 제작과 웨이포인트 해금이 가능한 타이탄 성소 6곳을 추가합니다.'
+    },
+    {
+        value: 'AbioticFactor',
+        title: 'Abiotic Factor 협업',
+        subtitle: '연구 시설 균열',
+        description: '잊힌 폐허에 협업 연구 시설 장면과 전용 적·펫·장비를 추가합니다. 이미 탐험한 일부가 덮어써질 수 있습니다.'
+    }
 ];
 
 function escapeHTML(str) {
@@ -1254,6 +1303,60 @@ function renderSelectControl(key, value, options) {
     return html;
 }
 
+function parseCoreKeeperContentBundles(value) {
+    const requested = new Set(String(value || '').split(',').map(item => item.trim()).filter(Boolean));
+    return CORE_KEEPER_CONTENT_BUNDLES
+        .map(bundle => bundle.value)
+        .filter(bundleValue => requested.has(bundleValue));
+}
+
+function toggleCoreKeeperContentBundle(options, bundleValue) {
+    const validValues = CORE_KEEPER_CONTENT_BUNDLES.map(bundle => bundle.value);
+    if (!validValues.includes(bundleValue)) return;
+
+    const selected = new Set(options.activateAllContent
+        ? validValues
+        : parseCoreKeeperContentBundles(options.activateContent));
+
+    if (selected.has(bundleValue)) {
+        selected.delete(bundleValue);
+    } else {
+        selected.add(bundleValue);
+    }
+
+    options.activateAllContent = false;
+    options.activateContent = validValues.filter(value => selected.has(value)).join(',');
+}
+
+function renderCoreKeeperContentBundles(value, activateAllContent) {
+    const selected = new Set(activateAllContent
+        ? CORE_KEEPER_CONTENT_BUNDLES.map(bundle => bundle.value)
+        : parseCoreKeeperContentBundles(value));
+
+    return `
+        <div class="content-bundle-grid" id="activateContent" role="group" aria-label="Core Keeper 기존 월드 콘텐츠 선택">
+            ${CORE_KEEPER_CONTENT_BUNDLES.map(bundle => {
+                const isActive = selected.has(bundle.value);
+                return `
+                    <button type="button"
+                            class="content-bundle-btn ${isActive ? 'active' : ''}"
+                            data-content-bundle="${escapeHTML(bundle.value)}"
+                            aria-pressed="${isActive}">
+                        <span class="content-bundle-check" aria-hidden="true">${isActive ? '✓' : '+'}</span>
+                        <span class="content-bundle-copy">
+                            <strong>${escapeHTML(bundle.title)}</strong>
+                            <span class="content-bundle-subtitle">${escapeHTML(bundle.subtitle)}</span>
+                            <span class="content-bundle-description">${escapeHTML(bundle.description)}</span>
+                            <code>${escapeHTML(bundle.value)}</code>
+                        </span>
+                    </button>
+                `;
+            }).join('')}
+        </div>
+        ${activateAllContent ? '<p class="content-bundle-legacy-note">기존 저장값의 모든 콘텐츠 활성화 설정이 적용되어 있습니다. 개별 버튼을 누르면 선택 방식으로 전환됩니다.</p>' : ''}
+    `;
+}
+
 function renderOptionRow(opt, envName, value) {
     let controlHtml = '';
     
@@ -1267,6 +1370,8 @@ function renderOptionRow(opt, envName, value) {
             : renderTextControl(opt.key, value);
     } else if (opt.type === 'select') {
         controlHtml = renderSelectControl(opt.key, value, opt.options);
+    } else if (opt.type === 'content-bundles') {
+        controlHtml = renderCoreKeeperContentBundles(value, state.draft.coreKeeperOptions.activateAllContent);
     }
 
     let cronPreviewHtml = '';
@@ -1276,9 +1381,20 @@ function renderOptionRow(opt, envName, value) {
     }
 
     const hintText = opt.helper ? opt.helper : `${opt.label} 기능을 설정합니다.`;
+    const linksHtml = Array.isArray(opt.links) && opt.links.length > 0
+        ? `
+            <nav class="option-links" aria-label="${escapeHTML(opt.label)} 관련 링크">
+                ${opt.links.map(link => `
+                    <a class="option-link" href="${escapeHTML(link.href)}" target="_blank" rel="noopener noreferrer">
+                        ${escapeHTML(link.label)} <span aria-hidden="true">↗</span>
+                    </a>
+                `).join('')}
+            </nav>
+        `
+        : '';
 
     return `
-        <div class="form-group">
+        <div class="form-group ${opt.type === 'content-bundles' ? 'form-group-wide' : ''}">
             <div class="label-row">
                 <label for="${opt.key}">
                     ${escapeHTML(opt.label)} (${escapeHTML(envName)})
@@ -1289,6 +1405,7 @@ function renderOptionRow(opt, envName, value) {
             ${opt.type !== 'boolean' ? controlHtml : ''}
             ${cronPreviewHtml}
             ${opt.helper ? `<p class="helper-text">${escapeHTML(opt.helper)}</p>` : ''}
+            ${linksHtml}
         </div>
     `;
 }
@@ -1434,6 +1551,13 @@ function setupOptionsListeners() {
     });
 
     container.addEventListener('click', (e) => {
+        const contentBundleButton = e.target.closest('.content-bundle-btn');
+        if (contentBundleButton && container.contains(contentBundleButton)) {
+            toggleCoreKeeperContentBundle(getDraftOptions(), contentBundleButton.dataset.contentBundle);
+            renderServerOptions();
+            return;
+        }
+
         if (e.target.matches('.option-toggle')) {
             const key = e.target.dataset.key;
             const val = e.target.dataset.val === 'true';

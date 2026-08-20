@@ -48,7 +48,7 @@ function loadAppForTest() {
   const appPath = path.join(__dirname, '..', 'app.js');
   const source = fs.readFileSync(appPath, 'utf8');
   vm.runInContext(
-    `${source}\n;globalThis.__testApi = { defaultDraftState, state, clone, mergeSavedAppState, buildCoreKeeperComposeYaml, generateComposeYaml, renderAppSections, setGame };`,
+    `${source}\n;globalThis.__testApi = { defaultDraftState, state, clone, mergeSavedAppState, buildCoreKeeperComposeYaml, generateComposeYaml, renderAppSections, setGame, parseCoreKeeperContentBundles, toggleCoreKeeperContentBundle };`,
     context,
     { filename: appPath }
   );
@@ -90,6 +90,36 @@ test('Core Keeper direct connection compose publishes UDP and includes direct se
   assert.match(yaml, /SERVER_PORT=27016/);
   assert.match(yaml, /PASSWORD=cave-pass/);
   assert.match(yaml, /ALLOW_ONLY_PLATFORM=1/);
+});
+
+test('Core Keeper selected content bundles are written to compose', () => {
+  const { api } = loadAppForTest();
+  const applied = api.clone(api.defaultDraftState);
+  applied.game = 'corekeeper';
+  applied.coreKeeperOptions.activateContent = 'GiantCicadaBossDungeon,BiomeStatues';
+
+  const yaml = api.buildCoreKeeperComposeYaml(applied);
+
+  assert.match(yaml, /ACTIVATE_CONTENT=GiantCicadaBossDungeon,BiomeStatues/);
+  assert.match(yaml, /ACTIVATE_ALL_CONTENT=false/);
+});
+
+test('Core Keeper content bundle toggle preserves order and handles legacy all-content state', () => {
+  const { api } = loadAppForTest();
+  const options = api.clone(api.defaultDraftState.coreKeeperOptions);
+
+  api.toggleCoreKeeperContentBundle(options, 'BiomeStatues');
+  api.toggleCoreKeeperContentBundle(options, 'GiantCicadaBossDungeon');
+  assert.equal(options.activateContent, 'GiantCicadaBossDungeon,BiomeStatues');
+
+  options.activateContent = '';
+  options.activateAllContent = true;
+  api.toggleCoreKeeperContentBundle(options, 'GuaranteedOases');
+  assert.equal(options.activateAllContent, false);
+  assert.deepEqual(
+    Array.from(api.parseCoreKeeperContentBundles(options.activateContent)),
+    ['GiantCicadaBossDungeon', 'NatureBiomeCicadas', 'BiomeStatues', 'AbioticFactor']
+  );
 });
 
 test('Core Keeper compose safely quotes special characters', () => {
@@ -144,6 +174,15 @@ test('selecting Core Keeper renders all Core Keeper sections', () => {
   assert.ok(optionsHtml.indexOf('Creative · 창작 모드') < optionsHtml.indexOf('Casual · 쉬움'));
   assert.ok(optionsHtml.indexOf('Casual · 쉬움') < optionsHtml.indexOf('Normal · 보통'));
   assert.ok(optionsHtml.indexOf('Normal · 보통') < optionsHtml.indexOf('Hard · 어려움'));
+  assert.equal((optionsHtml.match(/class="content-bundle-btn /g) || []).length, 5);
+  assert.match(optionsHtml, /모래 속 여왕/);
+  assert.match(optionsHtml, /오아시스와 드롬블/);
+  assert.match(optionsHtml, /6개의 타이탄 성소/);
+  assert.match(optionsHtml, /연구 시설 균열/);
+  assert.match(optionsHtml, /href="https:\/\/mod\.io\/g\/corekeeper"/);
+  assert.match(optionsHtml, /href="https:\/\/mod\.io\/me\/access"/);
+  assert.match(optionsHtml, /core-keeper-dedicated#mod-support/);
+  assert.match(optionsHtml, /target="_blank" rel="noopener noreferrer"/);
   assert.match(elements.get('volume-settings-fields').innerHTML, /core-keeper-data/);
   assert.match(elements.get('action-game').innerHTML, /data-section="game"/);
 });
