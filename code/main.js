@@ -349,7 +349,7 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1180,
     height: 860,
-    title: '팰월드 서버 YML 생성기',
+    title: '게임 서버 YML 생성기',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

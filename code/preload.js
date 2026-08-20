@@ -14,7 +14,7 @@ function requirePlainObject(value) {
 }
 
 const desktopBridge = Object.freeze({
-  appName: '팰월드 서버 YML 생성기',
+  appName: '게임 서버 YML 생성기',
   platform: 'electron',
   storageVersion: 1,
   loadSavedData: () => ipcRenderer.invoke(STORAGE_CHANNELS.load),
@@ -31,4 +31,5 @@ const desktopBridge = Object.freeze({
   }
 });
 
+contextBridge.exposeInMainWorld('gameServerDesktop', desktopBridge);
 contextBridge.exposeInMainWorld('palServerDesktop', desktopBridge);

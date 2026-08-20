@@ -256,6 +256,16 @@ p {
     transform: scale(1.1);
 }
 
+.creator-card.fixed-card {
+    cursor: default;
+}
+
+.creator-card.fixed-card:hover {
+    transform: none;
+    border-color: var(--accent-blue);
+    box-shadow: var(--shadow-glow-blue);
+}
+
 .card-icon {
     font-size: 2.2rem;
     line-height: 1;

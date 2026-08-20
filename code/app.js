@@ -1,4 +1,5 @@
 const defaultDraftState = {
+    game: 'palworld',
     creator: 'thijsvanloef',
     connection: {
         serverName: "팰월드 서버",
@@ -179,6 +180,37 @@ const defaultDraftState = {
     },
     volume: {
         hostPath: "./pal_server"
+    },
+    coreKeeperConnection: {
+        worldName: "Core Keeper Server",
+        gameId: "",
+        maxPlayers: 10,
+        directConnection: false,
+        serverIp: "",
+        serverPort: 27015,
+        password: "",
+        allowOnlyPlatform: ""
+    },
+    coreKeeperOptions: {
+        worldIndex: 0,
+        worldSeed: "",
+        hashedWorldSeed: "",
+        worldMode: "0",
+        season: "",
+        activateContent: "",
+        activateAllContent: false,
+        puid: 1000,
+        pgid: 1000,
+        arm64Device: "generic",
+        useDepotDownloader: false,
+        modsEnabled: false,
+        modioApiKey: "",
+        modioApiUrl: "",
+        mods: ""
+    },
+    coreKeeperVolume: {
+        filesPath: "./core-keeper-files",
+        dataPath: "./core-keeper-data"
     }
 };
 
@@ -361,6 +393,58 @@ const OPTIONS_SCHEMA = {
     ]
 };
 
+const CORE_KEEPER_OPTIONS_SCHEMA = [
+    { key: 'worldIndex', label: '월드 인덱스', env: 'WORLD_INDEX', type: 'number', min: 0, max: 99, step: 1 },
+    { key: 'worldSeed', label: '월드 시드', env: 'WORLD_SEED', type: 'text', helper: '비워두면 새 월드 생성 시 무작위 시드를 사용합니다.' },
+    { key: 'hashedWorldSeed', label: '해시 월드 시드', env: 'HASHED_WORLD_SEED', type: 'text', helper: 'Core Keeper 1.1 이상용 해시 시드입니다. 일반 시드를 사용한다면 비워두세요.' },
+    {
+        key: 'worldMode',
+        label: '월드 모드',
+        env: 'WORLD_MODE',
+        type: 'select',
+        options: [
+            { value: '2', label: 'Creative · 창작 모드 (2)' },
+            { value: '4', label: 'Casual · 쉬움 (4)' },
+            { value: '0', label: 'Normal · 보통 (0)' },
+            { value: '1', label: 'Hard · 어려움 (1)' }
+        ]
+    },
+    {
+        key: 'season',
+        label: '시즌 강제 지정',
+        env: 'SEASON',
+        type: 'select',
+        helper: '자동을 선택하면 실제 날짜에 따른 시즌을 사용합니다.',
+        options: [
+            { value: '', label: '자동 (환경변수 미설정)' },
+            { value: '0', label: 'None (0)' },
+            { value: '1', label: 'Easter (1)' },
+            { value: '2', label: 'Halloween (2)' },
+            { value: '3', label: 'Christmas (3)' },
+            { value: '4', label: 'Valentine (4)' },
+            { value: '5', label: 'Anniversary (5)' },
+            { value: '6', label: 'Cherry Blossom (6)' },
+            { value: '7', label: 'Lunar New Year (7)' }
+        ]
+    },
+    { key: 'activateContent', label: '기존 월드 콘텐츠 활성화', env: 'ACTIVATE_CONTENT', type: 'text', helper: '쉼표로 구분합니다. 활성화한 콘텐츠 번들은 다시 비활성화할 수 없습니다.' },
+    { key: 'activateAllContent', label: '모든 기존 월드 콘텐츠 활성화', env: 'ACTIVATE_ALL_CONTENT', type: 'boolean' },
+    { key: 'puid', label: '컨테이너 사용자 ID', env: 'PUID', type: 'number', min: 0, max: 65535, step: 1 },
+    { key: 'pgid', label: '컨테이너 그룹 ID', env: 'PGID', type: 'number', min: 0, max: 65535, step: 1 },
+    {
+        key: 'arm64Device',
+        label: 'ARM64 장치 프로필',
+        env: 'ARM64_DEVICE',
+        type: 'select',
+        options: ['generic', 'rpi3', 'rpi4-pre3', 'rpi5', 'rpi5_16k', 'm1', 'adlink']
+    },
+    { key: 'useDepotDownloader', label: 'DepotDownloader 사용', env: 'USE_DEPOT_DOWNLOADER', type: 'boolean', helper: '32비트 호환성이 없는 시스템에서 SteamCMD 대신 사용합니다.' },
+    { key: 'modsEnabled', label: 'mod.io 모드 사용', env: 'MODS_ENABLED', type: 'boolean' },
+    { key: 'modioApiKey', label: 'mod.io API 키', env: 'MODIO_API_KEY', type: 'text', sensitive: true },
+    { key: 'modioApiUrl', label: 'mod.io API URL', env: 'MODIO_API_URL', type: 'text', helper: '예: https://u-xxxx.modapi.io/v1' },
+    { key: 'mods', label: '설치할 모드', env: 'MODS', type: 'text', helper: '쉼표로 구분한 mod.io 문자열 ID를 입력합니다. 의존성은 자동 설치되지 않습니다.' }
+];
+
 function escapeHTML(str) {
     if (typeof str !== 'string') return str;
     return str.replace(/[&<>'"]/g, 
@@ -386,19 +470,34 @@ function renderHintIcon(text, labelStr) {
     `;
 }
 
-const creatorCards = document.querySelectorAll('.creator-card');
-
 function isValidAppState(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
     if (obj.creator !== 'thijsvanloef' && obj.creator !== 'jammsen') return false;
+    if (obj.game !== undefined && obj.game !== 'palworld' && obj.game !== 'corekeeper') return false;
     const isPlainObj = val => val !== null && typeof val === 'object' && !Array.isArray(val);
     if (!isPlainObj(obj.connection) || !isPlainObj(obj.serverOptions) || !isPlainObj(obj.volume)) return false;
+    if (obj.coreKeeperConnection !== undefined && !isPlainObj(obj.coreKeeperConnection)) return false;
+    if (obj.coreKeeperOptions !== undefined && !isPlainObj(obj.coreKeeperOptions)) return false;
+    if (obj.coreKeeperVolume !== undefined && !isPlainObj(obj.coreKeeperVolume)) return false;
     return true;
 }
 
+function mergeSavedAppState(savedState) {
+    return {
+        ...clone(defaultDraftState),
+        ...savedState,
+        connection: { ...defaultDraftState.connection, ...savedState.connection },
+        serverOptions: { ...defaultDraftState.serverOptions, ...savedState.serverOptions },
+        volume: { ...defaultDraftState.volume, ...savedState.volume },
+        coreKeeperConnection: { ...defaultDraftState.coreKeeperConnection, ...savedState.coreKeeperConnection },
+        coreKeeperOptions: { ...defaultDraftState.coreKeeperOptions, ...savedState.coreKeeperOptions },
+        coreKeeperVolume: { ...defaultDraftState.coreKeeperVolume, ...savedState.coreKeeperVolume }
+    };
+}
+
 function getDesktopBridge() {
-    if (typeof window !== 'undefined' && window.palServerDesktop) {
-        return window.palServerDesktop;
+    if (typeof window !== 'undefined') {
+        return window.gameServerDesktop || window.palServerDesktop || null;
     }
     return null;
 }
@@ -466,14 +565,9 @@ function setupLocalStorageListeners() {
                 if (!data || data.hasSavedData === false) {
                     setStatus("저장된 데이터가 없습니다.", true);
                 } else if (isValidAppState(data.draft) && isValidAppState(data.applied)) {
-                    state.draft = { ...clone(defaultDraftState), ...data.draft, connection: { ...defaultDraftState.connection, ...data.draft.connection }, serverOptions: { ...defaultDraftState.serverOptions, ...data.draft.serverOptions }, volume: { ...defaultDraftState.volume, ...data.draft.volume } };
-                    state.applied = { ...clone(defaultDraftState), ...data.applied, connection: { ...defaultDraftState.connection, ...data.applied.connection }, serverOptions: { ...defaultDraftState.serverOptions, ...data.applied.serverOptions }, volume: { ...defaultDraftState.volume, ...data.applied.volume } };
-                    
-                    const volInput = document.getElementById('volumeHostPath');
-                    if (volInput && state.draft.volume && state.draft.volume.hostPath) {
-                        volInput.value = state.draft.volume.hostPath;
-                    }
-                    updateCreatorUI();
+                    state.draft = mergeSavedAppState(data.draft);
+                    state.applied = mergeSavedAppState(data.applied);
+                    renderAppSections();
                     updateActionBars();
                     generateComposeYaml();
                     setStatus("저장값을 불러왔습니다.");
@@ -510,13 +604,9 @@ async function loadInitialData() {
     try {
         const data = await bridge.loadSavedData();
         if (data && data.hasSavedData !== false && isValidAppState(data.draft) && isValidAppState(data.applied)) {
-            state.draft = { ...clone(defaultDraftState), ...data.draft, connection: { ...defaultDraftState.connection, ...data.draft.connection }, serverOptions: { ...defaultDraftState.serverOptions, ...data.draft.serverOptions }, volume: { ...defaultDraftState.volume, ...data.draft.volume } };
-            state.applied = { ...clone(defaultDraftState), ...data.applied, connection: { ...defaultDraftState.connection, ...data.applied.connection }, serverOptions: { ...defaultDraftState.serverOptions, ...data.applied.serverOptions }, volume: { ...defaultDraftState.volume, ...data.applied.volume } };
-            const volInput = document.getElementById('volumeHostPath');
-            if (volInput && state.draft.volume && state.draft.volume.hostPath) {
-                volInput.value = state.draft.volume.hostPath;
-            }
-            updateCreatorUI();
+            state.draft = mergeSavedAppState(data.draft);
+            state.applied = mergeSavedAppState(data.applied);
+            renderAppSections();
             updateActionBars();
             generateComposeYaml();
         }
@@ -537,7 +627,7 @@ function init() {
     setupDownloadListener();
     updateLocalStorageUI();
     setupLocalStorageListeners();
-    updateCreatorUI();
+    renderAppSections();
     updateActionBars();
     generateComposeYaml();
     
@@ -553,17 +643,21 @@ function renderActionButtons(sectionKey) {
 }
 
 function updateActionBars() {
+    const isCoreKeeper = state.draft.game === 'corekeeper';
+    const actionGame = document.getElementById('action-game');
+    if (actionGame) actionGame.innerHTML = renderActionButtons('game');
+
     const actionCreator = document.getElementById('action-creator');
-    if (actionCreator) actionCreator.innerHTML = renderActionButtons('creator');
+    if (actionCreator) actionCreator.innerHTML = isCoreKeeper ? '' : renderActionButtons('creator');
     
     const actionVolume = document.getElementById('action-volume');
-    if (actionVolume) actionVolume.innerHTML = renderActionButtons('volume');
+    if (actionVolume) actionVolume.innerHTML = renderActionButtons(isCoreKeeper ? 'coreKeeperVolume' : 'volume');
     
     const actionConnection = document.getElementById('action-connection');
-    if (actionConnection) actionConnection.innerHTML = renderActionButtons('connection');
+    if (actionConnection) actionConnection.innerHTML = renderActionButtons(isCoreKeeper ? 'coreKeeperConnection' : 'connection');
     
     const actionOptions = document.getElementById('action-options');
-    if (actionOptions) actionOptions.innerHTML = renderActionButtons('serverOptions');
+    if (actionOptions) actionOptions.innerHTML = renderActionButtons(isCoreKeeper ? 'coreKeeperOptions' : 'serverOptions');
 }
 
 function setupVolumeAndGlobalListeners() {
@@ -579,14 +673,18 @@ function setupVolumeAndGlobalListeners() {
             const section = e.target.dataset.section;
             state.draft[section] = clone(state.applied[section]);
             
-            if (section === 'creator') {
-                updateCreatorUI();
-            } else if (section === 'connection') {
+            if (section === 'game') {
+                renderAppSections();
+            } else if (section === 'creator') {
+                renderCreatorSection();
                 renderConnectionSettings();
-            } else if (section === 'serverOptions') {
                 renderServerOptions();
-            } else if (section === 'volume') {
-                document.getElementById('volumeHostPath').value = state.draft.volume.hostPath;
+            } else if (section === 'connection' || section === 'coreKeeperConnection') {
+                renderConnectionSettings();
+            } else if (section === 'serverOptions' || section === 'coreKeeperOptions') {
+                renderServerOptions();
+            } else if (section === 'volume' || section === 'coreKeeperVolume') {
+                renderVolumeSettings();
             }
             updateActionBars();
         }
@@ -594,22 +692,20 @@ function setupVolumeAndGlobalListeners() {
         if (e.target.matches('#btn-reset-all')) {
             state.draft = clone(defaultDraftState);
             state.applied = clone(defaultDraftState);
-            
-            document.getElementById('volumeHostPath').value = state.draft.volume.hostPath;
-            updateCreatorUI();
+
+            renderAppSections();
             updateActionBars();
             generateComposeYaml();
         }
     });
 
-    const volumeInput = document.getElementById('volumeHostPath');
-    if (volumeInput) {
-        volumeInput.value = state.draft.volume.hostPath;
-        volumeInput.addEventListener('input', (e) => {
-            state.draft.volume.hostPath = e.target.value;
+    document.addEventListener('input', (e) => {
+        if (e.target.matches('[data-volume-key]')) {
+            const volumeState = state.draft.game === 'corekeeper' ? state.draft.coreKeeperVolume : state.draft.volume;
+            volumeState[e.target.dataset.volumeKey] = e.target.value;
             updateActionBars();
-        });
-    }
+        }
+    });
 }
 
 function setupDownloadListener() {
@@ -629,8 +725,9 @@ function setupDownloadListener() {
         }
 
         try {
-            if (window.palServerDesktop && typeof window.palServerDesktop.exportYml === 'function') {
-                const result = await window.palServerDesktop.exportYml(yamlContent);
+            const bridge = getDesktopBridge();
+            if (bridge && typeof bridge.exportYml === 'function') {
+                const result = await bridge.exportYml(yamlContent);
                 if (result.success) {
                     if (statusText) {
                         statusText.textContent = '저장되었습니다.';
@@ -669,16 +766,25 @@ function setupDownloadListener() {
 }
 
 function setupEventListeners() {
-    creatorCards.forEach(card => {
-        card.addEventListener('click', (e) => {
-            const selectedCreator = e.currentTarget.dataset.creator;
+    document.addEventListener('click', (e) => {
+        const gameCard = e.target.closest('.game-card');
+        if (gameCard) {
+            const selectedGame = gameCard.dataset.game;
+            if (selectedGame && selectedGame !== state.draft.game) {
+                setGame(selectedGame);
+            }
+            return;
+        }
+
+        const creatorCard = e.target.closest('.creator-card[data-creator]');
+        if (creatorCard) {
+            const selectedCreator = creatorCard.dataset.creator;
             if (selectedCreator && selectedCreator !== state.draft.creator) {
                 setCreator(selectedCreator);
             }
-        });
-    });
+            return;
+        }
 
-    document.addEventListener('click', (e) => {
         const hintIcon = e.target.closest('.hint-icon');
         if (hintIcon) {
             e.preventDefault();
@@ -700,15 +806,24 @@ function setupEventListeners() {
     });
 }
 
-function setCreator(creatorId) {
-    state.draft.creator = creatorId;
-    updateCreatorUI();
+function setGame(gameId) {
+    if (gameId !== 'palworld' && gameId !== 'corekeeper') return;
+    state.draft.game = gameId;
+    renderAppSections();
     updateActionBars();
 }
 
-function updateCreatorUI() {
-    creatorCards.forEach(card => {
-        if (card.dataset.creator === state.draft.creator) {
+function setCreator(creatorId) {
+    state.draft.creator = creatorId;
+    renderCreatorSection();
+    renderConnectionSettings();
+    renderServerOptions();
+    updateActionBars();
+}
+
+function updateGameUI() {
+    document.querySelectorAll('.game-card').forEach(card => {
+        if (card.dataset.game === state.draft.game) {
             card.classList.add('active');
             card.setAttribute('aria-pressed', 'true');
         } else {
@@ -716,8 +831,91 @@ function updateCreatorUI() {
             card.setAttribute('aria-pressed', 'false');
         }
     });
+}
+
+function renderCreatorSection() {
+    const container = document.getElementById('section-creator');
+    if (!container) return;
+
+    if (state.draft.game === 'corekeeper') {
+        container.innerHTML = `
+            <h2>2. Core Keeper Docker 이미지</h2>
+            <p class="section-desc">공식 설정 문서가 제공되는 커뮤니티 이미지로 Compose 파일을 구성합니다.</p>
+            <div class="creator-cards">
+                <div class="creator-card active fixed-card" aria-label="escaping 이미지 선택됨">
+                    <div class="card-icon">⛏️</div>
+                    <div class="card-content">
+                        <h3>escapingnetwork</h3>
+                        <p>escaping/core-keeper-dedicated:latest</p>
+                        <span class="badge">Core Keeper</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = `
+        <h2>2. Palworld Docker 이미지 선택 ${renderHintIcon('사용할 Palworld 서버의 베이스 이미지를 제공하는 제작자를 선택합니다.', 'Docker 이미지 선택')}</h2>
+        <p class="section-desc">사용할 Docker 이미지의 제작자를 선택해주세요.</p>
+        <div class="creator-cards">
+            <button class="creator-card ${state.draft.creator === 'thijsvanloef' ? 'active' : ''}" data-creator="thijsvanloef" aria-label="thijsvanloef 선택" aria-pressed="${state.draft.creator === 'thijsvanloef'}">
+                <div class="card-icon">🚀</div>
+                <div class="card-content">
+                    <h3>thijsvanloef</h3>
+                    <p>thijsvanloef/palworld-server-docker</p>
+                    <span class="badge">추천</span>
+                </div>
+            </button>
+            <button class="creator-card ${state.draft.creator === 'jammsen' ? 'active' : ''}" data-creator="jammsen" aria-label="jammsen 선택" aria-pressed="${state.draft.creator === 'jammsen'}">
+                <div class="card-icon">⚡</div>
+                <div class="card-content">
+                    <h3>jammsen</h3>
+                    <p>jammsen/palworld-dedicated-server</p>
+                </div>
+            </button>
+        </div>
+        <div class="action-bar" id="action-creator"></div>
+    `;
+}
+
+function renderAppSections() {
+    updateGameUI();
+    renderCreatorSection();
     renderConnectionSettings();
     renderServerOptions();
+    renderVolumeSettings();
+}
+
+function renderVolumeSettings() {
+    const container = document.getElementById('volume-settings-fields');
+    if (!container) return;
+
+    if (state.draft.game === 'corekeeper') {
+        const volume = state.draft.coreKeeperVolume;
+        container.innerHTML = `
+            <div class="form-group">
+                <label for="coreKeeperFilesPath">서버 프로그램 폴더 ${renderHintIcon('서버 실행 파일을 유지하는 선택 볼륨입니다. 제거해도 데이터 볼륨의 월드는 보존됩니다.', '서버 프로그램 폴더')}</label>
+                <input type="text" id="coreKeeperFilesPath" data-volume-key="filesPath" class="text-input" value="${escapeHTML(volume.filesPath)}" placeholder="./core-keeper-files">
+                <p class="helper-text">컨테이너의 /home/steam/core-keeper-dedicated에 연결됩니다.</p>
+            </div>
+            <div class="form-group mt-sm">
+                <label for="coreKeeperDataPath">월드 데이터 폴더 ${renderHintIcon('월드와 설정을 보존하는 필수 볼륨입니다.', '월드 데이터 폴더')}</label>
+                <input type="text" id="coreKeeperDataPath" data-volume-key="dataPath" class="text-input" value="${escapeHTML(volume.dataPath)}" placeholder="./core-keeper-data">
+                <p class="helper-text">컨테이너의 /home/steam/core-keeper-data에 연결됩니다.</p>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="form-group">
+                <label for="volumeHostPath">서버 데이터 폴더 (volume) ${renderHintIcon('호스트의 파일 시스템과 컨테이너를 연결하여 Palworld 데이터를 유지합니다.', '서버 데이터 폴더')}</label>
+                <input type="text" id="volumeHostPath" data-volume-key="hostPath" class="text-input" value="${escapeHTML(state.draft.volume.hostPath)}" placeholder="./pal_server">
+                <p class="helper-text">컨테이너의 /palworld에 연결됩니다.</p>
+            </div>
+        `;
+    }
+
+    updateActionBars();
 }
 
 function renderPortControl(key, value) {
@@ -776,13 +974,85 @@ function renderTextControl(key, value, placeholder = '') {
     `;
 }
 
+function renderCoreKeeperConnectionSettings(container) {
+    const conn = state.draft.coreKeeperConnection;
+    const platformOptions = [
+        { value: '', label: '전체 플랫폼 허용' },
+        { value: '1', label: 'Steam만 허용 (1)' },
+        { value: '2', label: 'Epic만 허용 (2)' },
+        { value: '3', label: 'Microsoft만 허용 (3)' },
+        { value: '4', label: 'GOG만 허용 (4)' }
+    ];
+
+    container.innerHTML = `
+        <h2>3. Core Keeper 접속 설정</h2>
+        <p class="section-desc">월드 이름과 접속 방식을 설정합니다. 기본 SDR 방식은 포트 개방 없이 Game ID로 접속합니다.</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="worldName">월드 이름 (WORLD_NAME) ${renderHintIcon('서버에서 사용할 Core Keeper 월드 이름입니다.', '월드 이름')}</label>
+                <input type="text" id="worldName" data-key="worldName" value="${escapeHTML(conn.worldName)}" class="text-input" placeholder="Core Keeper Server">
+            </div>
+
+            <div class="form-group">
+                <label for="gameId">고정 Game ID (GAME_ID) ${renderHintIcon('15~28자의 영숫자 ID입니다. 비워두면 최초 실행 시 자동 생성됩니다.', 'Game ID')}</label>
+                <input type="text" id="gameId" data-key="gameId" value="${escapeHTML(conn.gameId)}" class="text-input" maxlength="28" placeholder="비워두면 자동 생성">
+                <p class="helper-text">자동 생성된 ID는 컨테이너의 GameID.txt 또는 로그에서 확인할 수 있습니다.</p>
+            </div>
+
+            <div class="form-group">
+                <label for="maxPlayers">최대 플레이어 수 (MAX_PLAYERS)</label>
+                <input type="number" id="maxPlayers" data-key="maxPlayers" class="text-input connection-number" min="1" max="100" step="1" value="${escapeHTML(String(conn.maxPlayers))}">
+            </div>
+
+            <div class="form-divider"></div>
+
+            <div class="form-group">
+                <div class="label-row">
+                    <label>직접 연결 모드 (SERVER_PORT) ${renderHintIcon('활성화하면 SDR 대신 IP와 UDP 포트로 직접 접속하며, 라우터와 방화벽에서 포트를 열어야 합니다.', '직접 연결 모드')}</label>
+                    <div class="toggle-group" role="group" aria-label="직접 연결 모드">
+                        <button type="button" class="toggle-btn ${conn.directConnection ? 'active' : ''}" data-key="directConnection" data-val="true" aria-pressed="${conn.directConnection}">사용</button>
+                        <button type="button" class="toggle-btn ${!conn.directConnection ? 'active' : ''}" data-key="directConnection" data-val="false" aria-pressed="${!conn.directConnection}">SDR 사용</button>
+                    </div>
+                </div>
+
+                ${conn.directConnection ? `
+                    <div class="sub-form-group">
+                        <label for="serverIp">바인드 IP (SERVER_IP)</label>
+                        <input type="text" id="serverIp" data-key="serverIp" value="${escapeHTML(conn.serverIp)}" class="text-input" placeholder="비워두면 0.0.0.0">
+
+                        <label for="serverPort" class="mt-sm">직접 연결 UDP 포트 (SERVER_PORT)</label>
+                        ${renderPortControl('serverPort', conn.serverPort)}
+
+                        <label for="coreKeeperPassword" class="mt-sm">접속 비밀번호 (PASSWORD)</label>
+                        <input type="password" id="coreKeeperPassword" data-key="password" value="${escapeHTML(conn.password)}" class="text-input" maxlength="28" placeholder="최대 28자">
+
+                        <label for="allowOnlyPlatform" class="mt-sm">허용 플랫폼 (ALLOW_ONLY_PLATFORM)</label>
+                        <select id="allowOnlyPlatform" data-key="allowOnlyPlatform" class="text-input connection-select">
+                            ${platformOptions.map(option => `<option value="${option.value}" ${conn.allowOnlyPlatform === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}
+                        </select>
+                    </div>
+                ` : '<p class="helper-text">SDR은 Steam 릴레이를 사용하므로 인바운드 포트 매핑이 필요하지 않습니다.</p>'}
+            </div>
+        </div>
+        <div class="action-bar" id="action-connection"></div>
+    `;
+
+    container.classList.remove('placeholder-section');
+    updateActionBars();
+}
+
 function renderConnectionSettings() {
     const container = document.getElementById('section-connection');
+    if (state.draft.game === 'corekeeper') {
+        renderCoreKeeperConnectionSettings(container);
+        return;
+    }
+
     const conn = state.draft.connection;
     const isThijs = state.draft.creator === 'thijsvanloef';
 
     container.innerHTML = `
-        <h2>2. 접속 설정</h2>
+        <h2>3. Palworld 접속 설정</h2>
         <p class="section-desc">서버 이름, 비밀번호 및 포트 정보를 설정합니다.</p>
         
         <div class="form-grid">
@@ -891,11 +1161,32 @@ function renderConnectionSettings() {
 
 function renderServerOptions() {
     const container = document.getElementById('section-options');
+    if (state.draft.game === 'corekeeper') {
+        let coreHtml = `
+            <h2>4. Core Keeper 서버 옵션</h2>
+            <p class="section-desc">월드 생성, 컨테이너 권한, ARM 호환성 및 mod.io 모드를 설정합니다.</p>
+            <div class="form-grid">
+        `;
+
+        CORE_KEEPER_OPTIONS_SCHEMA.forEach(opt => {
+            if (['modioApiKey', 'modioApiUrl', 'mods'].includes(opt.key) && !state.draft.coreKeeperOptions.modsEnabled) {
+                return;
+            }
+            coreHtml += renderOptionRow(opt, opt.env, state.draft.coreKeeperOptions[opt.key]);
+        });
+
+        coreHtml += `</div><div class="action-bar" id="action-options"></div>`;
+        container.innerHTML = coreHtml;
+        container.classList.remove('placeholder-section');
+        updateActionBars();
+        return;
+    }
+
     const isThijs = state.draft.creator === 'thijsvanloef';
     const creatorKey = isThijs ? 'thijsvanloef' : 'jammsen';
 
     let html = `
-        <h2>3. 팰 서버 옵션</h2>
+        <h2>4. Palworld 서버 옵션</h2>
         <p class="section-desc">게임플레이 상세 설정 및 제작자 전용 운영 옵션을 구성합니다.</p>
         <div class="form-grid">
     `;
@@ -954,8 +1245,10 @@ function cronToKorean(cron) {
 function renderSelectControl(key, value, options) {
     let html = `<select class="text-input option-select" data-key="${escapeHTML(key)}" id="${escapeHTML(key)}">`;
     options.forEach(o => {
-        const isSelected = (value === o) ? 'selected' : '';
-        html += `<option value="${escapeHTML(o)}" ${isSelected}>${escapeHTML(o)}</option>`;
+        const optionValue = typeof o === 'object' ? o.value : o;
+        const optionLabel = typeof o === 'object' ? o.label : o;
+        const isSelected = (String(value) === String(optionValue)) ? 'selected' : '';
+        html += `<option value="${escapeHTML(String(optionValue))}" ${isSelected}>${escapeHTML(String(optionLabel))}</option>`;
     });
     html += `</select>`;
     return html;
@@ -969,7 +1262,9 @@ function renderOptionRow(opt, envName, value) {
     } else if (opt.type === 'boolean') {
         controlHtml = renderBooleanControl(opt.key, value);
     } else if (opt.type === 'text') {
-        controlHtml = renderTextControl(opt.key, value);
+        controlHtml = opt.sensitive
+            ? `<input type="password" id="${escapeHTML(opt.key)}" data-key="${escapeHTML(opt.key)}" value="${escapeHTML(value)}" class="text-input option-text" autocomplete="off">`
+            : renderTextControl(opt.key, value);
     } else if (opt.type === 'select') {
         controlHtml = renderSelectControl(opt.key, value, opt.options);
     }
@@ -1000,16 +1295,19 @@ function renderOptionRow(opt, envName, value) {
 
 function setupConnectionListeners() {
     const container = document.getElementById('section-connection');
+    const getDraftConnection = () => state.draft.game === 'corekeeper'
+        ? state.draft.coreKeeperConnection
+        : state.draft.connection;
     
     container.addEventListener('input', (e) => {
         if (e.target.matches('input[type="text"], input[type="password"]')) {
-            state.draft.connection[e.target.dataset.key] = e.target.value;
+            getDraftConnection()[e.target.dataset.key] = e.target.value;
             updateActionBars();
         }
         
         if (e.target.matches('.port-slider')) {
             const val = parseInt(e.target.value, 10);
-            state.draft.connection[e.target.dataset.key] = val;
+            getDraftConnection()[e.target.dataset.key] = val;
             const numInput = e.target.parentElement.querySelector('.port-input');
             if (numInput) numInput.value = val;
             updateActionBars();
@@ -1020,9 +1318,16 @@ function setupConnectionListeners() {
             if (isNaN(val)) return;
             if (val < 1024) val = 1024;
             if (val > 65535) val = 65535;
-            state.draft.connection[e.target.dataset.key] = val;
+            getDraftConnection()[e.target.dataset.key] = val;
             const slider = e.target.parentElement.querySelector('.port-slider');
             if (slider) slider.value = val;
+            updateActionBars();
+        }
+
+        if (e.target.matches('.connection-number')) {
+            if (e.target.value === '') return;
+            const val = sanitizeGenericNumericValue(e.target.value, e.target.min, e.target.max, e.target.step);
+            getDraftConnection()[e.target.dataset.key] = val;
             updateActionBars();
         }
     });
@@ -1033,9 +1338,21 @@ function setupConnectionListeners() {
             if (isNaN(val) || val < 1024) val = 1024;
             if (val > 65535) val = 65535;
             e.target.value = val;
-            state.draft.connection[e.target.dataset.key] = val;
+            getDraftConnection()[e.target.dataset.key] = val;
             const slider = e.target.parentElement.querySelector('.port-slider');
             if (slider) slider.value = val;
+            updateActionBars();
+        }
+
+        if (e.target.matches('.connection-number')) {
+            const val = sanitizeGenericNumericValue(e.target.value, e.target.min, e.target.max, e.target.step);
+            e.target.value = val;
+            getDraftConnection()[e.target.dataset.key] = val;
+            updateActionBars();
+        }
+
+        if (e.target.matches('.connection-select')) {
+            getDraftConnection()[e.target.dataset.key] = e.target.value;
             updateActionBars();
         }
     });
@@ -1044,8 +1361,9 @@ function setupConnectionListeners() {
         if (e.target.matches('.toggle-btn')) {
             const key = e.target.dataset.key;
             const val = e.target.dataset.val === 'true';
-            if (state.draft.connection[key] !== val) {
-                state.draft.connection[key] = val;
+            const connection = getDraftConnection();
+            if (connection[key] !== val) {
+                connection[key] = val;
                 renderConnectionSettings();
             }
         }
@@ -1054,10 +1372,13 @@ function setupConnectionListeners() {
 
 function setupOptionsListeners() {
     const container = document.getElementById('section-options');
+    const getDraftOptions = () => state.draft.game === 'corekeeper'
+        ? state.draft.coreKeeperOptions
+        : state.draft.serverOptions;
     
     container.addEventListener('input', (e) => {
         if (e.target.matches('.option-text')) {
-            state.draft.serverOptions[e.target.dataset.key] = e.target.value;
+            getDraftOptions()[e.target.dataset.key] = e.target.value;
             if (['t_autoRebootCronExpression', 't_autoUpdateCronExpression', 'j_backupCronExpression', 'j_restartCronExpression'].includes(e.target.dataset.key)) {
                 const previewSpan = document.getElementById(`cron-preview-${e.target.dataset.key}`);
                 if (previewSpan) {
@@ -1068,13 +1389,13 @@ function setupOptionsListeners() {
         }
         
         if (e.target.matches('.option-select')) {
-            state.draft.serverOptions[e.target.dataset.key] = e.target.value;
+            getDraftOptions()[e.target.dataset.key] = e.target.value;
             updateActionBars();
         }
         
         if (e.target.matches('.generic-num-slider')) {
             const val = sanitizeGenericNumericValue(e.target.value, e.target.min, e.target.max, e.target.step);
-            state.draft.serverOptions[e.target.dataset.key] = val;
+            getDraftOptions()[e.target.dataset.key] = val;
             e.target.value = val;
             const numInput = e.target.parentElement.querySelector('.generic-num-input');
             if (numInput) numInput.value = val;
@@ -1088,7 +1409,7 @@ function setupOptionsListeners() {
         if (e.target.matches('.generic-num-input')) {
             if (e.target.value === '') return;
             const val = sanitizeGenericNumericValue(e.target.value, e.target.min, e.target.max, e.target.step);
-            state.draft.serverOptions[e.target.dataset.key] = val;
+            getDraftOptions()[e.target.dataset.key] = val;
             if (Number.isInteger(parseFloat(e.target.step))) e.target.value = val;
             const slider = e.target.parentElement.querySelector('.generic-num-slider');
             if (slider) slider.value = val;
@@ -1098,14 +1419,14 @@ function setupOptionsListeners() {
 
     container.addEventListener('change', (e) => {
         if (e.target.matches('.option-select')) {
-            state.draft.serverOptions[e.target.dataset.key] = e.target.value;
+            getDraftOptions()[e.target.dataset.key] = e.target.value;
             updateActionBars();
         }
         
         if (e.target.matches('.generic-num-input')) {
             const val = sanitizeGenericNumericValue(e.target.value, e.target.min, e.target.max, e.target.step);
             e.target.value = val;
-            state.draft.serverOptions[e.target.dataset.key] = val;
+            getDraftOptions()[e.target.dataset.key] = val;
             const slider = e.target.parentElement.querySelector('.generic-num-slider');
             if (slider) slider.value = val;
             updateActionBars();
@@ -1116,8 +1437,9 @@ function setupOptionsListeners() {
         if (e.target.matches('.option-toggle')) {
             const key = e.target.dataset.key;
             const val = e.target.dataset.val === 'true';
-            if (state.draft.serverOptions[key] !== val) {
-                state.draft.serverOptions[key] = val;
+            const options = getDraftOptions();
+            if (options[key] !== val) {
+                options[key] = val;
                 renderServerOptions();
             }
         }
@@ -1146,8 +1468,84 @@ function yamlDoubleQuoted(str) {
     return '"' + escaped + '"';
 }
 
+function buildCoreKeeperComposeYaml(applied) {
+    const conn = applied.coreKeeperConnection;
+    const opts = applied.coreKeeperOptions;
+    const volume = applied.coreKeeperVolume;
+    const filesPath = volume.filesPath || './core-keeper-files';
+    const dataPath = volume.dataPath || './core-keeper-data';
+
+    let yaml = `services:
+  core-keeper:
+    image: escaping/core-keeper-dedicated:latest
+    container_name: core-keeper-dedicated
+    restart: unless-stopped
+    stop_grace_period: 2m
+`;
+
+    if (conn.directConnection) {
+        yaml += `    ports:\n      - ${yamlDoubleQuoted(`${conn.serverPort}:${conn.serverPort}/udp`)}\n`;
+    }
+
+    yaml += `    volumes:
+      - ${yamlDoubleQuoted(`${filesPath}:/home/steam/core-keeper-dedicated`)}
+      - ${yamlDoubleQuoted(`${dataPath}:/home/steam/core-keeper-data`)}
+    environment:
+`;
+
+    const addEnv = (key, value) => {
+        if (typeof value === 'boolean') {
+            yaml += `      - ${key}=${value ? 'true' : 'false'}\n`;
+        } else if (typeof value === 'number') {
+            yaml += `      - ${key}=${value}\n`;
+        } else if (typeof value === 'string') {
+            yaml += `      - ${yamlDoubleQuoted(`${key}=${value}`)}\n`;
+        }
+    };
+
+    addEnv('PUID', opts.puid);
+    addEnv('PGID', opts.pgid);
+    addEnv('ARM64_DEVICE', opts.arm64Device);
+    addEnv('USE_DEPOT_DOWNLOADER', opts.useDepotDownloader);
+    addEnv('WORLD_INDEX', opts.worldIndex);
+    addEnv('WORLD_NAME', conn.worldName);
+    addEnv('WORLD_SEED', opts.worldSeed);
+    addEnv('HASHED_WORLD_SEED', opts.hashedWorldSeed);
+    addEnv('WORLD_MODE', opts.worldMode);
+    if (opts.season !== '') addEnv('SEASON', opts.season);
+    if (conn.gameId) addEnv('GAME_ID', conn.gameId);
+    addEnv('MAX_PLAYERS', conn.maxPlayers);
+
+    if (conn.directConnection) {
+        if (conn.serverIp) addEnv('SERVER_IP', conn.serverIp);
+        addEnv('SERVER_PORT', conn.serverPort);
+        if (conn.password) addEnv('PASSWORD', conn.password);
+        if (conn.allowOnlyPlatform !== '') addEnv('ALLOW_ONLY_PLATFORM', conn.allowOnlyPlatform);
+    }
+
+    if (opts.activateContent) addEnv('ACTIVATE_CONTENT', opts.activateContent);
+    addEnv('ACTIVATE_ALL_CONTENT', opts.activateAllContent);
+    addEnv('MODS_ENABLED', opts.modsEnabled);
+    if (opts.modsEnabled) {
+        if (opts.modioApiKey) addEnv('MODIO_API_KEY', opts.modioApiKey);
+        if (opts.modioApiUrl) addEnv('MODIO_API_URL', opts.modioApiUrl);
+        if (opts.mods) addEnv('MODS', opts.mods);
+    }
+
+    return yaml;
+}
+
 function generateComposeYaml() {
     const applied = state.applied;
+    if (applied.game === 'corekeeper') {
+        const coreKeeperYaml = buildCoreKeeperComposeYaml(applied);
+        const coreKeeperOutput = document.getElementById('yml-output');
+        if (coreKeeperOutput) {
+            coreKeeperOutput.textContent = coreKeeperYaml;
+        }
+        return;
+    }
+
     const isThijs = applied.creator === 'thijsvanloef';
     const image = isThijs ? 'thijsvanloef/palworld-server-docker:latest' : 'jammsen/palworld-dedicated-server:latest';
     
