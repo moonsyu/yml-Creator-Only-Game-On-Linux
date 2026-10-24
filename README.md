@@ -55,6 +55,44 @@ Valheim 설정은 [community-valheim-tools/valheim-server-docker 공식 문서](
 - 모드 묶음을 교체할 때는 먼저 `docker compose down`으로 서버를 멈추고, 기존 월드·설정 볼륨 경로를 유지하세요. 월드 폴더는 삭제하지 마세요.
 - 서버용 모드를 선택하세요. 클라이언트에 필요한 모드는 플레이어 PC에도 같은 버전으로 설치해야 합니다. 게임 버전과 모드 간 호환성은 각 모드 안내를 확인하세요.
 
+#### Valheim 사용자 PC에 모드 설치하기 (Windows · Steam)
+
+서버에 모드를 설치해도 접속하는 PC에 자동으로 설치되지는 않습니다. 각 사용자는 PC에 필요한 모드와 BepInEx를 별도로 설치해야 합니다. Thunderstore 앱 없이 모드 ZIP을 직접 설치하려면 다음 순서를 따르세요.
+
+1. **발헤임을 종료하고 설치 폴더를 여세요.** Steam에서 발헤임을 우클릭한 뒤 **속성 → 설치된 파일 → 찾아보기**를 선택합니다. `valheim.exe`가 있는 폴더가 설치 위치입니다.
+
+   Windows에서 Steam과 발헤임을 기본 위치에 설치했다면 **기본 경로**는 다음과 같습니다. Steam 설치 위치나 라이브러리 드라이브를 바꾸셨다면 경로가 다르므로 Steam의 찾아보기로 실제 위치를 확인하세요.
+
+   ```text
+   C:\Program Files (x86)\Steam\steamapps\common\Valheim
+   ```
+
+2. **BepInEx를 설치하세요.** [Valheim용 BepInEx 설치팩](https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/) ZIP을 별도 폴더에 풀고, 그 안의 **`BepInExPack_Valheim` 폴더 내부 내용물**을 발헤임 설치 폴더에 복사합니다. BepInEx는 처음 한 번 설치하면 되며, 이미 설치되어 있다면 필요한 버전인지 확인하세요. 복사 후 구조는 다음과 같습니다.
+
+   ```text
+   Valheim/
+   ├─ valheim.exe
+   ├─ winhttp.dll
+   ├─ doorstop_config.ini
+   └─ BepInEx/
+   ```
+
+3. **사용할 모드 ZIP을 풀어서 설치하세요.** 일반적인 DLL 모드는 `BepInEx\plugins\모드이름\` 폴더에 DLL과 필요한 부속 파일을 함께 넣습니다. 부속 파일의 폴더 구조는 유지하세요. ZIP 안에 이미 `BepInEx` 폴더가 있다면 발헤임 설치 폴더의 같은 폴더에 합치세요. `plugins`, `config`, `patchers` 폴더가 바로 들어 있다면 각각 `BepInEx` 아래의 같은 폴더에 합치세요. 모드가 별도 설치 방법을 안내하면 그 안내를 우선 따르세요.
+
+   ```text
+   Valheim/BepInEx/plugins/모드이름/
+   ├─ 모드.dll
+   └─ 필요한 부속 파일들
+   ```
+
+   사용자 PC에 수동 설치할 때는 ZIP 자체를 `plugins`에 넣는 것으로 적용되지 않습니다. 압축을 풀어 실제 파일을 넣어 주세요. [BepInEx 플러그인 설치 위치 안내](https://docs.bepinex.dev/v5.4.11/articles/dev_guide/plugin_tutorial/2_plugin_start.html)를 참고하세요.
+
+4. **선행 모드와 버전을 확인하세요.** 각 모드가 요구하는 선행 모드도 설치합니다. 서버와 PC 양쪽에 필요한 모드는 버전을 맞추고, 서버 전용 모드인지 PC에도 필요한 모드인지는 해당 모드의 안내를 확인하세요. 수동 설치에서는 ZIP의 `manifest.json`만 넣어도 선행 모드가 자동 설치되는 것은 아닙니다.
+
+5. **Steam에서 발헤임을 실행하고 서버에 접속하세요.** Windows에서 위와 같이 수동 설치했다면 Steam으로 실행할 수 있습니다. BepInEx 콘솔과 `BepInEx\LogOutput.log`에서 모드 로딩 여부와 오류를 확인하세요.
+
+플레이어에게는 **각 모드의 원본 ZIP, 필요한 선행 모드 목록과 버전, 설치 안내**를 전달하세요. 생성기에서 내려받는 **모드 포함 실행 묶음 ZIP은 Linux 서버 실행용**입니다. 생성기에는 원본 모드 ZIP 여러 개를 압축 해제 없이 첨부할 수 있지만, 사용자 PC에 수동 설치할 때는 위와 같이 압축을 풀어 설치해야 합니다.
+
 ## 웹 버전
 
 [GitHub Pages에서 게임 서버 YML 생성기 열기](https://moonsyu.github.io/yml-Creator-Only-Game-On-Linux/)
