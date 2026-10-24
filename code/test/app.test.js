@@ -5,6 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 function loadAppForTest() {
+  const listeners = new Map();
   const makeElement = () => ({
     innerHTML: '',
     textContent: '',
@@ -21,16 +22,26 @@ function loadAppForTest() {
     'section-creator',
     'section-connection',
     'section-options',
-    'volume-settings-fields'
+    'volume-settings-fields',
+    'yaml-validation',
+    'btn-download-yml',
+    'btn-download-bundle',
+    'bundle-help',
+    'section-valheim-mods',
+    'action-valheim-mods',
+    'preview-title'
   ].map(id => [id, makeElement()]));
-  const gameCards = ['palworld', 'corekeeper'].map(game => ({
+  const gameCards = ['palworld', 'corekeeper', 'valheim'].map(game => ({
     dataset: { game },
     classList: { add() {}, remove() {} },
     setAttribute() {}
   }));
   const output = elements.get('yml-output');
   const document = {
-    addEventListener() {},
+    addEventListener(event, handler) {
+      if (!listeners.has(event)) listeners.set(event, []);
+      listeners.get(event).push(handler);
+    },
     getElementById(id) {
       return elements.get(id) || null;
     },
@@ -42,18 +53,21 @@ function loadAppForTest() {
     console,
     document,
     window: {},
+    TextEncoder,
+    ValheimMods: require('../valheim-mods.js'),
     setTimeout,
     clearTimeout
   });
   const appPath = path.join(__dirname, '..', 'app.js');
   const source = fs.readFileSync(appPath, 'utf8');
   vm.runInContext(
-    `${source}\n;globalThis.__testApi = { defaultDraftState, state, clone, mergeSavedAppState, buildCoreKeeperComposeYaml, generateComposeYaml, renderAppSections, setGame, parseCoreKeeperContentBundles, toggleCoreKeeperContentBundle };`,
+    `${source}\n;globalThis.__testApi = { defaultDraftState, state, clone, isValidAppState, mergeSavedAppState, buildCoreKeeperComposeYaml, buildValheimComposeYaml, validateValheimSettings, generateComposeYaml, renderAppSections, setGame, setupVolumeAndGlobalListeners, parseCoreKeeperContentBundles, toggleCoreKeeperContentBundle };`,
     context,
     { filename: appPath }
   );
 
-  return { api: context.__testApi, elements, output };
+  const dispatch = (event, target) => (listeners.get(event) || []).forEach(handler => handler({ target }));
+  return { api: context.__testApi, elements, output, dispatch };
 }
 
 test('Core Keeper SDR compose uses the documented image and persistent volumes', () => {
@@ -185,4 +199,252 @@ test('selecting Core Keeper renders all Core Keeper sections', () => {
   assert.match(optionsHtml, /target="_blank" rel="noopener noreferrer"/);
   assert.match(elements.get('volume-settings-fields').innerHTML, /core-keeper-data/);
   assert.match(elements.get('action-game').innerHTML, /data-section="game"/);
+});
+
+function validValheimState(api) {
+  const applied = api.clone(api.defaultDraftState);
+  applied.game = 'valheim';
+  applied.valheimConnection.serverPassword = 'test-password';
+  return applied;
+}
+
+test('Valheim compose keeps world and server data and uses the documented Steam ports', () => {
+  const { api } = loadAppForTest();
+  const yaml = api.buildValheimComposeYaml(validValheimState(api));
+
+  assert.match(yaml, /^services:\n  valheim:/);
+  assert.match(yaml, /image: ghcr\.io\/community-valheim-tools\/valheim-server:latest/);
+  assert.match(yaml, /stop_grace_period: 2m/);
+  assert.match(yaml, /cap_add:\n      - SYS_NICE/);
+  assert.match(yaml, /"2456-2457:2456-2457\/udp"/);
+  assert.match(yaml, /"\.\/valheim-config:\/config"/);
+  assert.match(yaml, /"\.\/valheim-data:\/opt\/valheim"/);
+  assert.match(yaml, /"SERVER_PORT=2456"/);
+  assert.match(yaml, /"CROSSPLAY=false"/);
+  assert.match(yaml, /"BACKUPS=true"/);
+  assert.match(yaml, /"TZ=Asia\/Seoul"/);
+  assert.doesNotMatch(yaml, /ADMINLIST_IDS|BANNEDLIST_IDS|PERMITTEDLIST_IDS|9001|palworld|core-keeper/);
+});
+
+test('Valheim custom ports follow SERVER_PORT and include the third port for crossplay', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  applied.valheimConnection.serverPort = 3456;
+  applied.valheimConnection.crossplay = true;
+  applied.valheimConnection.serverPublic = false;
+  const yaml = api.buildValheimComposeYaml(applied);
+
+  assert.match(yaml, /"3456-3458:3456-3458\/udp"/);
+  assert.match(yaml, /"SERVER_PORT=3456"/);
+  assert.match(yaml, /"CROSSPLAY=true"/);
+  assert.match(yaml, /"SERVER_PUBLIC=false"/);
+  applied.valheimConnection.serverPort = 65533;
+  assert.match(api.buildValheimComposeYaml(applied), /"65533-65535:65533-65535\/udp"/);
+});
+
+test('Valheim rejects missing identity, short passwords and invalid port ranges', () => {
+  const { api } = loadAppForTest();
+  for (const password of ['', '1234', null]) {
+    const applied = validValheimState(api);
+    applied.valheimConnection.serverPassword = password;
+    assert.throws(() => api.buildValheimComposeYaml(applied), /5자 이상/);
+  }
+  for (const port of [1023, 65534, 65535, 2456.5, null, '2456']) {
+    const applied = validValheimState(api);
+    applied.valheimConnection.serverPort = port;
+    assert.throws(() => api.buildValheimComposeYaml(applied), /1024~65533/);
+  }
+  const applied = validValheimState(api);
+  applied.valheimConnection.serverPassword = '12345';
+  assert.doesNotThrow(() => api.buildValheimComposeYaml(applied));
+  applied.valheimConnection.serverName = '  ';
+  applied.valheimConnection.worldName = '';
+  assert.equal(api.validateValheimSettings(applied).length, 2);
+});
+
+test('Valheim empty schedules explicitly disable periodic jobs and lists are opt-in', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  Object.assign(applied.valheimOptions, {
+    updateCron: '', restartCron: '', backupsCron: '', backups: false,
+    updateIfIdle: false, restartIfIdle: false, backupsMaxAge: 7, backupsMaxCount: 24,
+    adminIds: '76561198000000001 76561198000000002', bannedIds: '  ',
+    permittedIds: '76561198000000001', serverArgs: '-preset hard',
+    puid: 1001, pgid: 1002
+  });
+  const yaml = api.buildValheimComposeYaml(applied);
+
+  for (const name of ['UPDATE_CRON', 'RESTART_CRON', 'BACKUPS_CRON']) assert.ok(yaml.includes(`"${name}="`));
+  for (const entry of ['BACKUPS=false', 'UPDATE_IF_IDLE=false', 'RESTART_IF_IDLE=false', 'BACKUPS_MAX_AGE=7', 'BACKUPS_MAX_COUNT=24', 'PUID=1001', 'PGID=1002', 'SERVER_ARGS=-preset hard']) {
+    assert.ok(yaml.includes(`"${entry}"`), entry);
+  }
+  assert.match(yaml, /ADMINLIST_IDS=76561198000000001 76561198000000002/);
+  assert.match(yaml, /PERMITTEDLIST_IDS=76561198000000001/);
+  assert.doesNotMatch(yaml, /BANNEDLIST_IDS/);
+});
+
+test('Valheim mod loader selection cannot enable BepInEx and ValheimPlus together', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  for (const mode of ['vanilla', 'bepinex', 'valheimplus']) {
+    applied.valheimOptions.modMode = mode;
+    const yaml = api.buildValheimComposeYaml(applied);
+    assert.ok(yaml.includes(`"BEPINEX=${mode === 'bepinex'}"`));
+    assert.ok(yaml.includes(`"VALHEIM_PLUS=${mode === 'valheimplus'}"`));
+    assert.doesNotMatch(yaml, /BEPINEX \/ VALHEIM_PLUS=/);
+  }
+  applied.valheimOptions.modMode = 'unknown';
+  assert.throws(() => api.buildValheimComposeYaml(applied), /모드 로더/);
+});
+
+test('Valheim escapes YAML and Compose interpolation in user text and volume paths', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  applied.valheimConnection.serverName = 'Viking "Hall"\nSecond line';
+  applied.valheimConnection.serverPassword = 'a$PASS${WORD}#:\\"';
+  applied.valheimVolume.configPath = './worlds/$name';
+  applied.valheimVolume.dataPath = 'D:\\Valheim\\data';
+  const yaml = api.buildValheimComposeYaml(applied);
+  const entries = yaml.split('\n').filter(line => line.startsWith('      - "')).map(line => JSON.parse(line.slice(8)));
+
+  assert.ok(entries.includes('SERVER_NAME=Viking "Hall"\nSecond line'));
+  assert.ok(entries.includes('SERVER_PASS=a$$PASS$${WORD}#:\\"'));
+  assert.ok(entries.includes('./worlds/$$name:/config'));
+  assert.ok(entries.includes('D:\\Valheim\\data:/opt/valheim'));
+});
+
+test('older saved states acquire Valheim defaults and new states survive JSON persistence', () => {
+  const { api } = loadAppForTest();
+  for (const game of ['palworld', 'corekeeper']) {
+    const legacy = api.clone(api.defaultDraftState);
+    legacy.game = game;
+    delete legacy.valheimConnection;
+    delete legacy.valheimOptions;
+    delete legacy.valheimVolume;
+    assert.ok(api.isValidAppState(legacy));
+    const merged = api.mergeSavedAppState(legacy);
+    assert.equal(merged.game, game);
+    assert.equal(merged.valheimConnection.serverPort, 2456);
+    assert.equal(merged.valheimVolume.configPath, './valheim-config');
+  }
+  const saved = validValheimState(api);
+  saved.valheimOptions.backups = false;
+  saved.valheimOptions.restartCron = '';
+  saved.valheimVolume.configPath = './existing-world';
+  const roundTrip = api.mergeSavedAppState(JSON.parse(JSON.stringify(saved)));
+  assert.ok(api.isValidAppState(roundTrip));
+  assert.equal(JSON.stringify(roundTrip), JSON.stringify(saved));
+  roundTrip.valheimConnection = null;
+  assert.equal(api.isValidAppState(roundTrip), false);
+  saved.game = 'toString';
+  assert.equal(api.isValidAppState(saved), false);
+});
+
+test('Valheim validation blocks output and download until valid applied settings exist', () => {
+  const { api, elements, output } = loadAppForTest();
+  api.state.applied.game = 'valheim';
+  api.generateComposeYaml();
+  assert.equal(output.textContent, '');
+  assert.equal(elements.get('btn-download-yml').disabled, true);
+  assert.equal(elements.get('yaml-validation').hidden, false);
+  assert.match(elements.get('yaml-validation').textContent, /5자 이상/);
+
+  api.state.applied.valheimConnection.serverPassword = 'test-password';
+  api.generateComposeYaml();
+  assert.match(output.textContent, /valheim-server:latest/);
+  assert.equal(elements.get('btn-download-yml').disabled, false);
+  assert.equal(elements.get('yaml-validation').hidden, true);
+
+  api.state.applied.valheimConnection.serverPassword = '';
+  api.generateComposeYaml();
+  api.state.applied.game = 'corekeeper';
+  api.generateComposeYaml();
+  assert.equal(elements.get('btn-download-yml').disabled, false);
+  assert.equal(elements.get('yaml-validation').hidden, true);
+  assert.match(output.textContent, /core-keeper-dedicated:latest/);
+});
+
+test('Valheim sections apply and restore independently and survive switching games', () => {
+  const { api, elements, output, dispatch } = loadAppForTest();
+  api.setupVolumeAndGlobalListeners();
+  const click = (selector, section) => dispatch('click', { matches: value => value === selector, dataset: { section } });
+  api.setGame('valheim');
+  assert.match(elements.get('section-creator').innerHTML, /community-valheim-tools/);
+  assert.match(elements.get('section-connection').innerHTML, /Valheim 접속 설정/);
+  assert.match(elements.get('section-options').innerHTML, /BACKUPS_CRON/);
+  assert.match(elements.get('volume-settings-fields').innerHTML, /valheimConfigPath/);
+  assert.match(elements.get('action-connection').innerHTML, /data-section="valheimConnection"/);
+  assert.equal(api.state.applied.game, 'palworld');
+  click('.btn-apply', 'game');
+  api.state.draft.valheimConnection.serverPassword = 'new-password';
+  api.state.draft.valheimOptions.backups = false;
+  click('.btn-apply', 'valheimConnection');
+  assert.match(output.textContent, /SERVER_PASS=new-password/);
+  assert.match(output.textContent, /BACKUPS=true/);
+  click('.btn-restore', 'valheimOptions');
+  assert.equal(api.state.draft.valheimOptions.backups, true);
+  api.state.draft.valheimOptions.backups = false;
+  click('.btn-apply', 'valheimOptions');
+  assert.match(output.textContent, /BACKUPS=false/);
+  dispatch('input', { matches: value => value === '[data-volume-key]', dataset: { volumeKey: 'configPath' }, value: './my-world' });
+  click('.btn-apply', 'valheimVolume');
+  assert.match(output.textContent, /\.\/my-world:\/config/);
+  api.state.draft.valheimVolume.configPath = './discard';
+  click('.btn-restore', 'valheimVolume');
+  assert.equal(api.state.draft.valheimVolume.configPath, './my-world');
+
+  for (const game of ['corekeeper', 'palworld', 'valheim']) api.setGame(game);
+  assert.equal(api.state.draft.valheimConnection.serverPassword, 'new-password');
+  assert.equal(api.state.draft.connection.serverPassword, '');
+  assert.equal(api.state.draft.coreKeeperConnection.password, '');
+  api.state.draft.valheimConnection.serverPassword = 'discard';
+  click('.btn-restore', 'valheimConnection');
+  assert.equal(api.state.draft.valheimConnection.serverPassword, 'new-password');
+  click('#btn-reset-all');
+  assert.equal(api.state.draft.game, 'palworld');
+  assert.equal(api.state.applied.valheimConnection.serverPassword, '');
+  assert.match(output.textContent, /palworld-server-docker/);
+});
+
+test('mod application includes the loader and installer while preserving unrelated options', () => {
+  const { api, elements, output, dispatch } = loadAppForTest();
+  api.setupVolumeAndGlobalListeners();
+  api.state.draft = validValheimState(api);
+  api.state.applied = validValheimState(api);
+  api.state.draft.valheimOptions.modMode = 'bepinex';
+  api.state.draft.valheimOptions.backups = false;
+  api.state.draft.valheimMods.packages = 'Team-Mod-1.0.0';
+  const click = (selector, section) => dispatch('click', { matches: value => value === selector, dataset: { section } });
+  click('.btn-apply', 'valheimMods');
+  assert.equal(api.state.applied.valheimOptions.modMode, 'bepinex');
+  assert.equal(api.state.applied.valheimOptions.backups, true);
+  assert.match(output.textContent, /\.\/valheim-mods:\/mod-bundle:ro/);
+  assert.match(output.textContent, /PRE_SUPERVISOR_HOOK=python3 \/mod-bundle\/install.py --bundle \/mod-bundle --config \/config \|\| exit 1/);
+  assert.equal(elements.get('btn-download-yml').disabled, true);
+  assert.equal(elements.get('btn-download-bundle').hidden, false);
+  assert.equal(elements.get('btn-download-bundle').disabled, false);
+  api.state.draft.valheimMods.packages = 'Team-Other';
+  click('.btn-restore', 'valheimMods');
+  assert.equal(api.state.draft.valheimMods.packages, 'Team-Mod-1.0.0');
+  api.state.draft.valheimMods.packages = '';
+  assert.equal(api.state.applied.valheimMods.packages, 'Team-Mod-1.0.0');
+});
+
+test('saved uploads block incomplete bundles and old saves receive empty mod settings', () => {
+  const { api, elements, output } = loadAppForTest();
+  const legacy = validValheimState(api);
+  delete legacy.valheimMods;
+  assert.ok(api.isValidAppState(legacy));
+  assert.equal(api.mergeSavedAppState(legacy).valheimMods.files.length, 0);
+  api.state.applied = validValheimState(api);
+  api.state.applied.valheimOptions.modMode = 'bepinex';
+  api.state.applied.valheimMods.files = [{ id: 'saved-file', name: 'Mod.dll', size: 10 }];
+  api.generateComposeYaml();
+  assert.equal(output.textContent, '');
+  assert.equal(elements.get('btn-download-bundle').disabled, true);
+  assert.match(elements.get('yaml-validation').textContent, /첨부 파일을 다시 선택/);
+  api.state.applied.game = 'corekeeper';
+  api.generateComposeYaml();
+  assert.equal(elements.get('btn-download-bundle').hidden, true);
+  assert.equal(elements.get('btn-download-yml').disabled, false);
 });

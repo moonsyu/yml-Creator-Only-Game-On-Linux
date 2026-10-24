@@ -211,8 +211,48 @@ const defaultDraftState = {
     coreKeeperVolume: {
         filesPath: "./core-keeper-files",
         dataPath: "./core-keeper-data"
+    },
+    valheimConnection: {
+        serverName: "Valheim Server",
+        worldName: "Dedicated",
+        serverPassword: "",
+        serverPort: 2456,
+        serverPublic: true,
+        crossplay: false
+    },
+    valheimOptions: {
+        timezone: "Asia/Seoul",
+        puid: 1000,
+        pgid: 1000,
+        adminIds: "",
+        bannedIds: "",
+        permittedIds: "",
+        serverArgs: "",
+        updateCron: "*/15 * * * *",
+        updateIfIdle: true,
+        restartCron: "10 5 * * *",
+        restartIfIdle: true,
+        backups: true,
+        backupsCron: "5 * * * *",
+        backupsMaxAge: 3,
+        backupsMaxCount: 0,
+        backupsIfIdle: true,
+        backupsZip: true,
+        modMode: "vanilla"
+    },
+    valheimVolume: {
+        configPath: "./valheim-config",
+        dataPath: "./valheim-data"
+    },
+    valheimMods: {
+        packages: "",
+        files: [],
+        configs: []
     }
 };
+
+// File bytes stay in this session; saved settings contain only file descriptors.
+const valheimModFiles = new Map();
 
 function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
@@ -393,6 +433,38 @@ const OPTIONS_SCHEMA = {
     ]
 };
 
+// https://github.com/community-valheim-tools/valheim-server-docker#environment-variables
+const VALHEIM_OPTIONS_SCHEMA = [
+    { key: 'timezone', label: '시간대', env: 'TZ', type: 'text', helper: '백업·업데이트·재시작 스케줄에 사용할 시간대입니다. 기본값: Asia/Seoul' },
+    { key: 'puid', label: '사용자 ID', env: 'PUID', type: 'number', min: 0, max: 65535, step: 1 },
+    { key: 'pgid', label: '그룹 ID', env: 'PGID', type: 'number', min: 0, max: 65535, step: 1 },
+    { key: 'adminIds', label: '관리자 SteamID64', env: 'ADMINLIST_IDS', type: 'text', helper: '공백으로 구분합니다. 입력하면 기존 adminlist.txt를 덮어쓰며, 비워두면 기존 파일을 유지합니다.' },
+    { key: 'bannedIds', label: '차단 SteamID64', env: 'BANNEDLIST_IDS', type: 'text', helper: '공백으로 구분합니다. 입력하면 기존 bannedlist.txt를 덮어쓰며, 비워두면 기존 파일을 유지합니다.' },
+    { key: 'permittedIds', label: '접속 허용 SteamID64', env: 'PERMITTEDLIST_IDS', type: 'text', helper: '입력하면 목록의 사용자만 접속할 수 있습니다. 공백으로 구분하며 기존 permittedlist.txt를 덮어씁니다. 비워두면 기존 파일을 유지합니다.' },
+    { key: 'serverArgs', label: '추가 서버 실행 인수', env: 'SERVER_ARGS', type: 'text', helper: '필요한 Valheim 실행 인수를 입력합니다. 서버 이름·월드·포트·크로스플레이는 위 접속 설정에서 지정하세요.' },
+    { key: 'updateCron', label: '업데이트 확인 주기', env: 'UPDATE_CRON', type: 'text', helper: 'Cron 식을 입력합니다. 기본값은 15분마다이며, 비워두면 주기적인 업데이트 확인을 끕니다.' },
+    { key: 'updateIfIdle', label: '플레이어가 없을 때만 업데이트', env: 'UPDATE_IF_IDLE', type: 'boolean' },
+    { key: 'restartCron', label: '자동 재시작 주기', env: 'RESTART_CRON', type: 'text', helper: 'Cron 식을 입력합니다. 기본값은 매일 05:10이며, 비워두면 자동 재시작을 끕니다.' },
+    { key: 'restartIfIdle', label: '플레이어가 없을 때만 재시작', env: 'RESTART_IF_IDLE', type: 'boolean' },
+    { key: 'backups', label: '월드 자동 백업', env: 'BACKUPS', type: 'boolean', helper: '백업은 월드·설정 폴더 안의 backups에 저장됩니다.' },
+    { key: 'backupsCron', label: '백업 주기', env: 'BACKUPS_CRON', type: 'text', helper: 'Cron 식을 입력합니다. 기본값은 매시간 5분이며, 비워두면 주기적인 백업을 끕니다.' },
+    { key: 'backupsMaxAge', label: '백업 보관 일수', env: 'BACKUPS_MAX_AGE', type: 'number', min: 1, max: 3650, step: 1 },
+    { key: 'backupsMaxCount', label: '최대 백업 개수', env: 'BACKUPS_MAX_COUNT', type: 'number', min: 0, max: 10000, step: 1, helper: '0이면 개수 제한이 없습니다. 백업 보관 일수는 계속 적용됩니다.' },
+    { key: 'backupsIfIdle', label: '플레이어가 없어도 백업', env: 'BACKUPS_IF_IDLE', type: 'boolean' },
+    { key: 'backupsZip', label: '백업 ZIP 압축', env: 'BACKUPS_ZIP', type: 'boolean' },
+    { key: 'modMode', label: '모드 로더', env: 'BEPINEX / VALHEIM_PLUS', type: 'select', options: [
+        { value: 'vanilla', label: '기본 서버 (모드 없음)' },
+        { value: 'bepinex', label: 'BepInEx' },
+        { value: 'valheimplus', label: 'ValheimPlus' }
+    ], helper: '두 로더는 동시에 사용할 수 없습니다. 플러그인은 월드·설정 폴더의 bepinex/plugins 또는 valheimplus/plugins에 넣으세요. 모드의 게임 버전·크로스플레이 호환성을 확인하세요.' }
+];
+
+const GAME_SECTIONS = {
+    palworld: { connection: 'connection', options: 'serverOptions', volume: 'volume' },
+    corekeeper: { connection: 'coreKeeperConnection', options: 'coreKeeperOptions', volume: 'coreKeeperVolume' },
+    valheim: { connection: 'valheimConnection', options: 'valheimOptions', volume: 'valheimVolume' }
+};
+
 const CORE_KEEPER_OPTIONS_SCHEMA = [
     { key: 'worldIndex', label: '월드 인덱스', env: 'WORLD_INDEX', type: 'number', min: 0, max: 99, step: 1 },
     { key: 'worldSeed', label: '월드 시드', env: 'WORLD_SEED', type: 'text', helper: '비워두면 새 월드 생성 시 무작위 시드를 사용합니다.' },
@@ -522,12 +594,19 @@ function renderHintIcon(text, labelStr) {
 function isValidAppState(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
     if (obj.creator !== 'thijsvanloef' && obj.creator !== 'jammsen') return false;
-    if (obj.game !== undefined && obj.game !== 'palworld' && obj.game !== 'corekeeper') return false;
+    if (obj.game !== undefined && !Object.hasOwn(GAME_SECTIONS, obj.game)) return false;
     const isPlainObj = val => val !== null && typeof val === 'object' && !Array.isArray(val);
     if (!isPlainObj(obj.connection) || !isPlainObj(obj.serverOptions) || !isPlainObj(obj.volume)) return false;
     if (obj.coreKeeperConnection !== undefined && !isPlainObj(obj.coreKeeperConnection)) return false;
     if (obj.coreKeeperOptions !== undefined && !isPlainObj(obj.coreKeeperOptions)) return false;
     if (obj.coreKeeperVolume !== undefined && !isPlainObj(obj.coreKeeperVolume)) return false;
+    if (obj.valheimConnection !== undefined && !isPlainObj(obj.valheimConnection)) return false;
+    if (obj.valheimOptions !== undefined && !isPlainObj(obj.valheimOptions)) return false;
+    if (obj.valheimVolume !== undefined && !isPlainObj(obj.valheimVolume)) return false;
+    if (obj.valheimMods !== undefined && (!isPlainObj(obj.valheimMods) || typeof obj.valheimMods.packages !== 'string' ||
+        !Array.isArray(obj.valheimMods.files) || !Array.isArray(obj.valheimMods.configs) ||
+        obj.valheimMods.files.some(file => !isPlainObj(file) || typeof file.id !== 'string' || typeof file.name !== 'string' || !Number.isFinite(file.size) || file.size < 0) ||
+        obj.valheimMods.configs.some(file => !isPlainObj(file) || typeof file.name !== 'string' || typeof file.content !== 'string'))) return false;
     return true;
 }
 
@@ -540,7 +619,11 @@ function mergeSavedAppState(savedState) {
         volume: { ...defaultDraftState.volume, ...savedState.volume },
         coreKeeperConnection: { ...defaultDraftState.coreKeeperConnection, ...savedState.coreKeeperConnection },
         coreKeeperOptions: { ...defaultDraftState.coreKeeperOptions, ...savedState.coreKeeperOptions },
-        coreKeeperVolume: { ...defaultDraftState.coreKeeperVolume, ...savedState.coreKeeperVolume }
+        coreKeeperVolume: { ...defaultDraftState.coreKeeperVolume, ...savedState.coreKeeperVolume },
+        valheimConnection: { ...defaultDraftState.valheimConnection, ...savedState.valheimConnection },
+        valheimOptions: { ...defaultDraftState.valheimOptions, ...savedState.valheimOptions },
+        valheimVolume: { ...defaultDraftState.valheimVolume, ...savedState.valheimVolume },
+        valheimMods: { ...clone(defaultDraftState.valheimMods), ...savedState.valheimMods }
     };
 }
 
@@ -674,6 +757,7 @@ function init() {
     setupOptionsListeners();
     setupVolumeAndGlobalListeners();
     setupDownloadListener();
+    setupValheimModsListeners();
     updateLocalStorageUI();
     setupLocalStorageListeners();
     renderAppSections();
@@ -692,21 +776,23 @@ function renderActionButtons(sectionKey) {
 }
 
 function updateActionBars() {
-    const isCoreKeeper = state.draft.game === 'corekeeper';
+    const sections = GAME_SECTIONS[state.draft.game];
     const actionGame = document.getElementById('action-game');
     if (actionGame) actionGame.innerHTML = renderActionButtons('game');
 
     const actionCreator = document.getElementById('action-creator');
-    if (actionCreator) actionCreator.innerHTML = isCoreKeeper ? '' : renderActionButtons('creator');
+    if (actionCreator) actionCreator.innerHTML = state.draft.game === 'palworld' ? renderActionButtons('creator') : '';
     
     const actionVolume = document.getElementById('action-volume');
-    if (actionVolume) actionVolume.innerHTML = renderActionButtons(isCoreKeeper ? 'coreKeeperVolume' : 'volume');
+    if (actionVolume) actionVolume.innerHTML = renderActionButtons(sections.volume);
     
     const actionConnection = document.getElementById('action-connection');
-    if (actionConnection) actionConnection.innerHTML = renderActionButtons(isCoreKeeper ? 'coreKeeperConnection' : 'connection');
+    if (actionConnection) actionConnection.innerHTML = renderActionButtons(sections.connection);
     
     const actionOptions = document.getElementById('action-options');
-    if (actionOptions) actionOptions.innerHTML = renderActionButtons(isCoreKeeper ? 'coreKeeperOptions' : 'serverOptions');
+    if (actionOptions) actionOptions.innerHTML = renderActionButtons(sections.options);
+    const actionMods = document.getElementById('action-valheim-mods');
+    if (actionMods) actionMods.innerHTML = renderActionButtons('valheimMods');
 }
 
 function setupVolumeAndGlobalListeners() {
@@ -714,6 +800,9 @@ function setupVolumeAndGlobalListeners() {
         if (e.target.matches('.btn-apply')) {
             const section = e.target.dataset.section;
             state.applied[section] = clone(state.draft[section]);
+            if (section === 'valheimMods') {
+                state.applied.valheimOptions.modMode = state.draft.valheimOptions.modMode;
+            }
             updateActionBars();
             generateComposeYaml();
         }
@@ -728,12 +817,14 @@ function setupVolumeAndGlobalListeners() {
                 renderCreatorSection();
                 renderConnectionSettings();
                 renderServerOptions();
-            } else if (section === 'connection' || section === 'coreKeeperConnection') {
+            } else if (section === GAME_SECTIONS[state.draft.game].connection) {
                 renderConnectionSettings();
-            } else if (section === 'serverOptions' || section === 'coreKeeperOptions') {
+            } else if (section === GAME_SECTIONS[state.draft.game].options) {
                 renderServerOptions();
-            } else if (section === 'volume' || section === 'coreKeeperVolume') {
+            } else if (section === GAME_SECTIONS[state.draft.game].volume) {
                 renderVolumeSettings();
+            } else if (section === 'valheimMods') {
+                renderValheimMods();
             }
             updateActionBars();
         }
@@ -741,6 +832,7 @@ function setupVolumeAndGlobalListeners() {
         if (e.target.matches('#btn-reset-all')) {
             state.draft = clone(defaultDraftState);
             state.applied = clone(defaultDraftState);
+            valheimModFiles.clear();
 
             renderAppSections();
             updateActionBars();
@@ -750,7 +842,7 @@ function setupVolumeAndGlobalListeners() {
 
     document.addEventListener('input', (e) => {
         if (e.target.matches('[data-volume-key]')) {
-            const volumeState = state.draft.game === 'corekeeper' ? state.draft.coreKeeperVolume : state.draft.volume;
+            const volumeState = state.draft[GAME_SECTIONS[state.draft.game].volume];
             volumeState[e.target.dataset.volumeKey] = e.target.value;
             updateActionBars();
         }
@@ -814,6 +906,154 @@ function setupDownloadListener() {
     });
 }
 
+function needsValheimModBundle(applied) {
+    return applied.game === 'valheim' && applied.valheimOptions.modMode !== 'vanilla';
+}
+
+function renderValheimMods() {
+    const previewTitle = document.getElementById('preview-title');
+    if (previewTitle) previewTitle.textContent = `${state.draft.game === 'valheim' ? 6 : 5}. YML 미리보기`;
+    const container = document.getElementById('section-valheim-mods');
+    if (!container) return;
+    container.hidden = state.draft.game !== 'valheim';
+    if (container.hidden) return;
+    const mods = state.draft.valheimMods;
+    container.innerHTML = `
+        <h2>5. Valheim 모드 설치·설정</h2>
+        <p class="section-desc">Thunderstore 모드와 내 PC의 ZIP·DLL을 함께 넣을 수 있습니다. 모드를 적용한 뒤 실행 묶음 ZIP을 내려받으세요.</p>
+        <div class="form-group">
+            <label for="valheimPackages">Thunderstore 링크 또는 모드 ID</label>
+            <textarea id="valheimPackages" class="text-input mod-textarea" rows="4" placeholder="제작자-모드명-1.2.3 또는 Thunderstore 모드 링크&#10;한 줄에 하나씩 입력하세요.">${escapeHTML(mods.packages)}</textarea>
+            <p class="helper-text">서버 시작 전에 의존 모드까지 설치합니다. 버전을 생략하면 첫 설치 시 최신 버전을 선택하고 이후 같은 묶음에서는 유지합니다.</p>
+            <a class="option-link" href="https://thunderstore.io/c/valheim/" target="_blank" rel="noopener noreferrer">Thunderstore에서 Valheim 모드 찾기 ↗</a>
+        </div>
+        <div class="form-group mt-sm">
+            <label for="valheimModUpload">내 PC의 모드 파일 추가 (ZIP·DLL)</label>
+            <input id="valheimModUpload" type="file" class="text-input" accept=".zip,.dll" multiple>
+            <p class="helper-text">합계 32 MiB까지 첨부할 수 있습니다. ZIP의 manifest.json에 있는 의존 모드는 자동 설치합니다. DLL만 첨부할 때는 필요한 의존 모드를 위 목록에 추가하세요.</p>
+            <ul class="mod-file-list">${mods.files.map(file => `<li><span>${escapeHTML(file.name)} (${(file.size / 1024).toFixed(1)} KiB)${valheimModFiles.has(file.id) ? '' : ' — 다시 선택 필요'}</span><button type="button" class="btn btn-secondary" data-remove-mod="${escapeHTML(file.id)}" aria-label="${escapeHTML(file.name)} 제거">제거</button></li>`).join('')}</ul>
+            <p class="helper-text">첨부 파일은 실행 묶음에 포함됩니다. 로컬 설정 저장에는 파일 목록만 저장되므로 앱을 다시 열면 파일을 다시 선택해 주세요.</p>
+        </div>
+        <div class="form-group mt-sm">
+            <label for="valheimConfigUpload">모드 설정 파일 불러오기 (.cfg)</label>
+            <input id="valheimConfigUpload" type="file" class="text-input" accept=".cfg" multiple>
+            <p class="helper-text">모드가 생성한 .cfg를 불러와 아래에서 수정하거나 새 설정을 추가하세요. 파일당 128 KiB까지 지원합니다. 기존 서버 설정은 유지하며, 아래에 지정한 파일만 덮어씁니다.</p>
+            <button type="button" id="btn-add-mod-config" class="btn btn-secondary">설정 파일 직접 추가</button>
+        </div>
+        <div class="mod-config-list">${mods.configs.map((config, index) => `
+            <div class="mod-config-editor">
+                <label for="mod-config-name-${index}">설정 파일 이름</label>
+                <input id="mod-config-name-${index}" class="text-input mod-config-name" data-config-index="${index}" value="${escapeHTML(config.name)}" placeholder="예: 모드가 생성한 파일명.cfg">
+                <label for="mod-config-content-${index}">설정 내용</label>
+                <textarea id="mod-config-content-${index}" class="text-input mod-textarea mod-config-content" data-config-index="${index}" rows="8" spellcheck="false">${escapeHTML(config.content)}</textarea>
+                <button type="button" class="btn btn-secondary" data-remove-config="${index}">이 설정 제외</button>
+            </div>`).join('')}</div>
+        <p class="helper-text mt-sm">모드를 처음 추가하면 BepInEx를 선택합니다. 위 서버 옵션에서 ValheimPlus로 바꿀 수도 있습니다. 모드의 적용 버튼은 선택한 로더도 함께 적용합니다. 클라이언트 전용 모드는 제외하고, 플레이어에게도 필요한 모드는 각 PC에 설치하세요.</p>
+        <p id="valheim-mod-status" class="helper-text" role="status"></p>
+        <div class="action-bar" id="action-valheim-mods"></div>
+    `;
+    updateActionBars();
+}
+
+function setupValheimModsListeners() {
+    const container = document.getElementById('section-valheim-mods');
+    if (!container) return;
+    const enableLoader = () => {
+        if (ValheimMods.hasContent(state.draft.valheimMods) && state.draft.valheimOptions.modMode === 'vanilla') {
+            state.draft.valheimOptions.modMode = 'bepinex';
+            renderServerOptions();
+        }
+    };
+    container.addEventListener('input', event => {
+        const input = event.target;
+        if (input.id === 'valheimPackages') state.draft.valheimMods.packages = input.value;
+        if (input.matches('.mod-config-name, .mod-config-content')) {
+            const config = state.draft.valheimMods.configs[Number(input.dataset.configIndex)];
+            if (config) config[input.matches('.mod-config-name') ? 'name' : 'content'] = input.value;
+        }
+        enableLoader();
+        updateActionBars();
+    });
+    container.addEventListener('click', event => {
+        const target = event.target;
+        if (target.id === 'btn-add-mod-config') {
+            state.draft.valheimMods.configs.push({ name: '', content: '' });
+        } else if (target.matches('[data-remove-mod]')) {
+            state.draft.valheimMods.files = state.draft.valheimMods.files.filter(file => file.id !== target.dataset.removeMod);
+        } else if (target.matches('[data-remove-config]')) {
+            state.draft.valheimMods.configs.splice(Number(target.dataset.removeConfig), 1);
+        } else return;
+        enableLoader();
+        renderValheimMods();
+    });
+    container.addEventListener('change', async event => {
+        if (!['valheimModUpload', 'valheimConfigUpload'].includes(event.target.id)) return;
+        const input = event.target;
+        const mods = state.draft.valheimMods;
+        const incoming = Array.from(input.files || []);
+        try {
+            if (input.id === 'valheimModUpload') {
+                const names = new Set(incoming.map(file => file.name));
+                const retained = mods.files.filter(file => !names.has(file.name));
+                if (retained.reduce((size, file) => size + file.size, 0) + incoming.reduce((size, file) => size + file.size, 0) > ValheimMods.MAX_UPLOAD_BYTES) throw new Error('첨부 파일 합계는 32 MiB 이하여야 합니다.');
+                const additions = [];
+                for (const file of incoming) {
+                    if (!/\.(zip|dll)$/i.test(file.name) || /[\\/:\x00-\x1f]/.test(file.name)) throw new Error('ZIP 또는 DLL만 첨부할 수 있습니다.');
+                    additions.push({ descriptor: { id: crypto.randomUUID(), name: file.name, size: file.size }, data: new Uint8Array(await file.arrayBuffer()) });
+                }
+                if (state.draft.valheimMods !== mods) return;
+                for (const file of additions) valheimModFiles.set(file.descriptor.id, file.data);
+                mods.files = retained.concat(additions.map(file => file.descriptor));
+            } else {
+                const additions = [];
+                for (const file of incoming) {
+                    if (!ValheimMods.safeConfigName(file.name) || file.size > ValheimMods.MAX_CONFIG_BYTES) throw new Error('각각 128 KiB 이하의 .cfg 파일을 선택하세요.');
+                    additions.push({ name: file.name, content: await file.text() });
+                }
+                if (state.draft.valheimMods !== mods) return;
+                mods.configs = mods.configs.filter(config => !additions.some(file => file.name === config.name)).concat(additions);
+            }
+            enableLoader();
+            renderValheimMods();
+        } catch (error) {
+            const status = document.getElementById('valheim-mod-status');
+            if (status) status.textContent = error.message;
+        } finally {
+            input.value = '';
+        }
+    });
+    const bundleButton = document.getElementById('btn-download-bundle');
+    if (bundleButton) bundleButton.addEventListener('click', async () => {
+        const status = document.getElementById('download-status');
+        try {
+            const errors = validateValheimSettings(state.applied);
+            if (errors.length) throw new Error(errors.join(' '));
+            bundleButton.disabled = true;
+            const bytes = ValheimMods.buildBundle(state.applied, buildValheimComposeYaml(state.applied), valheimModFiles, VALHEIM_MOD_INSTALLER_SOURCE, fflate.zipSync);
+            const bridge = getDesktopBridge();
+            if (bridge && typeof bridge.exportBundle === 'function') {
+                const result = await bridge.exportBundle(bytes);
+                if (result.canceled) return;
+                if (!result.success) throw new Error(result.error || '묶음을 저장하지 못했습니다.');
+            } else {
+                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'valheim-server-bundle.zip';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            if (status) status.textContent = '실행 묶음을 저장했습니다. 서버에서 압축을 풀고 docker compose up -d 를 실행하세요.';
+        } catch (error) {
+            if (status) status.textContent = '실행 묶음 생성 실패: ' + error.message;
+        } finally {
+            generateComposeYaml();
+        }
+    });
+}
+
 function setupEventListeners() {
     document.addEventListener('click', (e) => {
         const gameCard = e.target.closest('.game-card');
@@ -856,7 +1096,7 @@ function setupEventListeners() {
 }
 
 function setGame(gameId) {
-    if (gameId !== 'palworld' && gameId !== 'corekeeper') return;
+    if (!Object.hasOwn(GAME_SECTIONS, gameId)) return;
     state.draft.game = gameId;
     renderAppSections();
     updateActionBars();
@@ -885,6 +1125,24 @@ function updateGameUI() {
 function renderCreatorSection() {
     const container = document.getElementById('section-creator');
     if (!container) return;
+
+    if (state.draft.game === 'valheim') {
+        container.innerHTML = `
+            <h2>2. Valheim Docker 이미지</h2>
+            <p class="section-desc">자동 업데이트·월드 백업·모드 로더를 지원하는 커뮤니티 이미지입니다.</p>
+            <div class="creator-cards">
+                <div class="creator-card active fixed-card" aria-label="community-valheim-tools 이미지 선택됨">
+                    <div class="card-icon">⚔️</div>
+                    <div class="card-content">
+                        <h3>community-valheim-tools</h3>
+                        <p>ghcr.io/community-valheim-tools/valheim-server:latest</p>
+                        <span class="badge">Valheim</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
 
     if (state.draft.game === 'corekeeper') {
         container.innerHTML = `
@@ -934,13 +1192,28 @@ function renderAppSections() {
     renderConnectionSettings();
     renderServerOptions();
     renderVolumeSettings();
+    renderValheimMods();
 }
 
 function renderVolumeSettings() {
     const container = document.getElementById('volume-settings-fields');
     if (!container) return;
 
-    if (state.draft.game === 'corekeeper') {
+    if (state.draft.game === 'valheim') {
+        const volume = state.draft.valheimVolume;
+        container.innerHTML = `
+            <div class="form-group">
+                <label for="valheimConfigPath">월드·설정 폴더</label>
+                <input type="text" id="valheimConfigPath" data-volume-key="configPath" class="text-input" value="${escapeHTML(volume.configPath)}" placeholder="./valheim-config">
+                <p class="helper-text">/config에 연결됩니다. worlds_local의 월드, 관리자 목록, 백업과 모드 설정을 보존합니다.</p>
+            </div>
+            <div class="form-group mt-sm">
+                <label for="valheimDataPath">서버 프로그램 폴더</label>
+                <input type="text" id="valheimDataPath" data-volume-key="dataPath" class="text-input" value="${escapeHTML(volume.dataPath)}" placeholder="./valheim-data">
+                <p class="helper-text">/opt/valheim에 연결되어 서버 실행 파일과 다운로드 캐시를 유지합니다. 월드·설정 폴더와 다른 경로를 지정하세요.</p>
+            </div>
+        `;
+    } else if (state.draft.game === 'corekeeper') {
         const volume = state.draft.coreKeeperVolume;
         container.innerHTML = `
             <div class="form-group">
@@ -1090,8 +1363,56 @@ function renderCoreKeeperConnectionSettings(container) {
     updateActionBars();
 }
 
+function renderValheimConnectionSettings(container) {
+    const conn = state.draft.valheimConnection;
+    container.innerHTML = `
+        <h2>3. Valheim 접속 설정</h2>
+        <p class="section-desc">서버 이름과 월드, 접속 비밀번호를 입력하고 적용하세요. 비밀번호는 5자 이상이어야 합니다.</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="valheimServerName">서버 이름 (SERVER_NAME)</label>
+                <input type="text" id="valheimServerName" data-key="serverName" value="${escapeHTML(conn.serverName)}" class="text-input" placeholder="Valheim Server" required>
+            </div>
+            <div class="form-group">
+                <label for="valheimWorldName">월드 이름 (WORLD_NAME)</label>
+                <input type="text" id="valheimWorldName" data-key="worldName" value="${escapeHTML(conn.worldName)}" class="text-input" placeholder="Dedicated" required>
+                <p class="helper-text">기존 월드는 worlds_local 안의 월드 이름과 일치시켜 주세요. 이전 형식의 세이브는 .db/.fwl 확장자를 제외한 이름입니다.</p>
+            </div>
+            <div class="form-group">
+                <label for="valheimServerPassword">접속 비밀번호 (SERVER_PASS)</label>
+                <input type="password" id="valheimServerPassword" data-key="serverPassword" value="${escapeHTML(conn.serverPassword)}" class="text-input" minlength="5" autocomplete="new-password" placeholder="5자 이상 입력" required>
+            </div>
+            <div class="form-group">
+                <label for="valheimServerPort">시작 UDP 포트 (SERVER_PORT)</label>
+                <input type="number" id="valheimServerPort" data-key="serverPort" value="${escapeHTML(String(conn.serverPort))}" class="text-input connection-number" min="1024" max="65533" step="1">
+                <p class="helper-text">시작 포트와 다음 포트를 함께 사용합니다. 크로스플레이를 켜면 세 번째 포트도 포함합니다.</p>
+            </div>
+            <div class="form-group">
+                <div class="label-row"><label>서버 목록 공개 (SERVER_PUBLIC)</label>
+                    ${renderBooleanControl('serverPublic', conn.serverPublic, '공개', '비공개')}
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="label-row"><label>크로스플레이 (CROSSPLAY)</label>
+                    ${renderBooleanControl('crossplay', conn.crossplay)}
+                </div>
+                <p class="helper-text">${conn.crossplay
+                    ? 'PlayFab을 통해 Steam·Xbox·Microsoft Store 등의 클라이언트가 접속합니다. LAN IP 접속은 지원하지 않으므로 참가 코드를 사용하세요.'
+                    : 'Steam 전용입니다. 외부 접속에는 시작 포트와 다음 UDP 포트의 방화벽·포트포워딩 설정이 필요합니다.'}</p>
+            </div>
+        </div>
+        <div class="action-bar" id="action-connection"></div>
+    `;
+    container.classList.remove('placeholder-section');
+    updateActionBars();
+}
+
 function renderConnectionSettings() {
     const container = document.getElementById('section-connection');
+    if (state.draft.game === 'valheim') {
+        renderValheimConnectionSettings(container);
+        return;
+    }
     if (state.draft.game === 'corekeeper') {
         renderCoreKeeperConnectionSettings(container);
         return;
@@ -1210,6 +1531,19 @@ function renderConnectionSettings() {
 
 function renderServerOptions() {
     const container = document.getElementById('section-options');
+    if (state.draft.game === 'valheim') {
+        container.innerHTML = `
+            <h2>4. Valheim 서버 옵션</h2>
+            <p class="section-desc">관리자, 자동 업데이트·재시작·백업 및 모드 로더를 설정합니다.</p>
+            <div class="form-grid">
+                ${VALHEIM_OPTIONS_SCHEMA.map(opt => renderOptionRow(opt, opt.env, state.draft.valheimOptions[opt.key])).join('')}
+            </div>
+            <div class="action-bar" id="action-options"></div>
+        `;
+        container.classList.remove('placeholder-section');
+        updateActionBars();
+        return;
+    }
     if (state.draft.game === 'corekeeper') {
         let coreHtml = `
             <h2>4. Core Keeper 서버 옵션</h2>
@@ -1412,9 +1746,7 @@ function renderOptionRow(opt, envName, value) {
 
 function setupConnectionListeners() {
     const container = document.getElementById('section-connection');
-    const getDraftConnection = () => state.draft.game === 'corekeeper'
-        ? state.draft.coreKeeperConnection
-        : state.draft.connection;
+    const getDraftConnection = () => state.draft[GAME_SECTIONS[state.draft.game].connection];
     
     container.addEventListener('input', (e) => {
         if (e.target.matches('input[type="text"], input[type="password"]')) {
@@ -1489,9 +1821,7 @@ function setupConnectionListeners() {
 
 function setupOptionsListeners() {
     const container = document.getElementById('section-options');
-    const getDraftOptions = () => state.draft.game === 'corekeeper'
-        ? state.draft.coreKeeperOptions
-        : state.draft.serverOptions;
+    const getDraftOptions = () => state.draft[GAME_SECTIONS[state.draft.game].options];
     
     container.addEventListener('input', (e) => {
         if (e.target.matches('.option-text')) {
@@ -1659,8 +1989,89 @@ function buildCoreKeeperComposeYaml(applied) {
     return yaml;
 }
 
+function validateValheimSettings(applied, uploadedFiles) {
+    const conn = applied.valheimConnection;
+    const errors = [];
+    if (typeof conn.serverName !== 'string' || !conn.serverName.trim()) errors.push('서버 이름을 입력하세요.');
+    if (typeof conn.worldName !== 'string' || !conn.worldName.trim()) errors.push('월드 이름을 입력하세요.');
+    if (typeof conn.serverPassword !== 'string' || conn.serverPassword.length < 5) errors.push('접속 비밀번호를 5자 이상 입력하세요.');
+    if (!Number.isInteger(conn.serverPort) || conn.serverPort < 1024 || conn.serverPort > 65533) {
+        errors.push('시작 UDP 포트는 1024~65533 사이의 정수여야 합니다.');
+    }
+    if (!['vanilla', 'bepinex', 'valheimplus'].includes(applied.valheimOptions.modMode)) errors.push('모드 로더를 다시 선택하세요.');
+    errors.push(...ValheimMods.validate(applied.valheimMods, applied.valheimOptions.modMode, uploadedFiles));
+    return errors;
+}
+
+function buildValheimComposeYaml(applied) {
+    const errors = validateValheimSettings(applied);
+    if (errors.length) throw new Error(errors.join(' '));
+
+    const conn = applied.valheimConnection;
+    const opts = applied.valheimOptions;
+    const volume = applied.valheimVolume;
+    // Compose interpolates dollar signs even inside YAML quotes. Keep user input literal.
+    const quote = value => yamlDoubleQuoted(String(value).replace(/\$/g, () => '$$'));
+    const lastPort = conn.serverPort + (conn.crossplay ? 2 : 1);
+    let yaml = `services:
+  valheim:
+    image: ghcr.io/community-valheim-tools/valheim-server:latest
+    container_name: valheim-server
+    restart: unless-stopped
+    stop_grace_period: 2m
+    cap_add:
+      - SYS_NICE
+    ports:
+      - "${conn.serverPort}-${lastPort}:${conn.serverPort}-${lastPort}/udp"
+    volumes:
+      - ${quote(`${volume.configPath || './valheim-config'}:/config`)}
+      - ${quote(`${volume.dataPath || './valheim-data'}:/opt/valheim`)}
+`;
+    if (needsValheimModBundle(applied)) yaml += `      - "./valheim-mods:/mod-bundle:ro"\n`;
+    yaml += '    environment:\n';
+    const addEnv = (key, value) => { yaml += `      - ${quote(`${key}=${value}`)}\n`; };
+    addEnv('SERVER_NAME', conn.serverName);
+    addEnv('WORLD_NAME', conn.worldName);
+    addEnv('SERVER_PASS', conn.serverPassword);
+    addEnv('SERVER_PORT', conn.serverPort);
+    addEnv('SERVER_PUBLIC', conn.serverPublic);
+    addEnv('CROSSPLAY', conn.crossplay);
+
+    VALHEIM_OPTIONS_SCHEMA.forEach(opt => {
+        if (opt.key === 'modMode') return;
+        // Omitting empty ID lists preserves existing list files on the persistent volume.
+        if (['adminIds', 'bannedIds', 'permittedIds'].includes(opt.key) && !opts[opt.key].trim()) return;
+        addEnv(opt.env, opts[opt.key]);
+    });
+    addEnv('BEPINEX', opts.modMode === 'bepinex');
+    addEnv('VALHEIM_PLUS', opts.modMode === 'valheimplus');
+    if (needsValheimModBundle(applied)) addEnv('PRE_SUPERVISOR_HOOK', 'python3 /mod-bundle/install.py --bundle /mod-bundle --config /config || exit 1');
+    return yaml;
+}
+
 function generateComposeYaml() {
     const applied = state.applied;
+    const errors = applied.game === 'valheim' ? validateValheimSettings(applied, valheimModFiles) : [];
+    const validation = document.getElementById('yaml-validation');
+    const download = document.getElementById('btn-download-yml');
+    const bundleDownload = document.getElementById('btn-download-bundle');
+    const bundleHelp = document.getElementById('bundle-help');
+    const needsBundle = needsValheimModBundle(applied);
+    if (validation) {
+        validation.textContent = errors.length ? `${errors.join(' ')} 해당 설정을 수정한 뒤 적용하세요.` : '';
+        validation.hidden = errors.length === 0;
+    }
+    if (download) download.disabled = errors.length > 0 || needsBundle;
+    if (bundleDownload) {
+        bundleDownload.hidden = !needsBundle;
+        bundleDownload.disabled = errors.length > 0;
+    }
+    if (bundleHelp) bundleHelp.hidden = !needsBundle;
+    if (applied.game === 'valheim') {
+        const output = document.getElementById('yml-output');
+        if (output) output.textContent = errors.length ? '' : buildValheimComposeYaml(applied);
+        return;
+    }
     if (applied.game === 'corekeeper') {
         const coreKeeperYaml = buildCoreKeeperComposeYaml(applied);
         const coreKeeperOutput = document.getElementById('yml-output');

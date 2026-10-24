@@ -11,7 +11,7 @@
     <div class="app-container">
         <header class="app-header">
             <h1>게임 서버 YML 생성기</h1>
-            <p>Palworld와 Core Keeper 전용 Docker Compose 설정 파일을 구성하세요.</p>
+            <p>Palworld, Core Keeper, Valheim 전용 Docker Compose 설정 파일을 구성하세요.</p>
         </header>
 
         <main class="app-main">
@@ -33,6 +33,13 @@
                             <p>Core Keeper 전용 서버 Compose 생성</p>
                         </div>
                     </button>
+                    <button class="creator-card game-card" data-game="valheim" aria-label="Valheim 발헤임 선택" aria-pressed="false">
+                        <div class="card-icon">⚔️</div>
+                        <div class="card-content">
+                            <h3>Valheim · 발헤임</h3>
+                            <p>Valheim 전용 서버 Compose 생성</p>
+                        </div>
+                    </button>
                 </div>
                 <div class="action-bar" id="action-game"></div>
             </section>
@@ -46,8 +53,10 @@
                 <h2>4. 서버 옵션</h2>
             </section>
 
+            <section class="section-container" id="section-valheim-mods" hidden></section>
+
             <section class="section-container" id="section-actions">
-                <h2>5. YML 미리보기</h2>
+                <h2 id="preview-title">5. YML 미리보기</h2>
                 
                 <div class="volume-settings">
                     <div id="volume-settings-fields"></div>
@@ -71,6 +80,7 @@
                 </div>
 
                 <div class="global-actions" style="gap: var(--spacing-sm); display: flex; align-items: center; justify-content: flex-end;">
+                    <button type="button" id="btn-download-bundle" class="btn btn-primary" hidden>모드 포함 실행 묶음 ZIP 다운로드</button>
                     <div style="display: inline-flex; align-items: center;">
                         <button type="button" id="btn-download-yml" class="btn btn-primary">YML 다운로드</button>
                         <span class="hint-wrapper" style="margin-left: 8px;">
@@ -86,7 +96,9 @@
                         </span>
                     </div>
                 </div>
+                <p id="bundle-help" class="helper-text" hidden>모드 설치에 필요한 파일을 함께 받으려면 실행 묶음 ZIP을 사용하세요. 서버에서 ZIP 전체를 풀고 그 폴더에서 <code>docker compose up -d</code>를 실행하면 모드 설치 후 서버가 시작됩니다.</p>
                 <p id="download-status" class="helper-text" style="text-align: right; margin-top: -var(--spacing-md); margin-bottom: var(--spacing-lg); min-height: 1.2em;"></p>
+                <p id="yaml-validation" class="helper-text validation-error" role="status" hidden></p>
 
                 <div class="yml-output-container">
                     <pre><code id="yml-output"></code></pre>
@@ -95,6 +107,9 @@
         </main>
     </div>
     
+    <script src="vendor/fflate-0.8.2.js" defer></script>
+    <script src="valheim-installer-source.js" defer></script>
+    <script src="valheim-mods.js" defer></script>
     <script src="app.js" defer></script>
 </body>
 </html>

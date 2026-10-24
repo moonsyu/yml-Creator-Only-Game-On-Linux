@@ -10,6 +10,7 @@ const STORAGE_VERSION = 1;
 const MAX_SAVE_PAYLOAD_BYTES = 1024 * 1024;
 const MAX_STATE_SECTION_BYTES = 512 * 1024;
 const MAX_YAML_BYTES = 512 * 1024;
+const MAX_BUNDLE_BYTES = 40 * 1024 * 1024;
 const MAX_OBJECT_DEPTH = 20;
 const MAX_OBJECT_NODES = 2000;
 const ALLOWED_SAVE_KEYS = new Set(['draft', 'applied', 'yaml']);
@@ -280,6 +281,25 @@ function assertAllowedIpcSender(event) {
 }
 
 function registerStorageIpcHandlers() {
+  ipcMain.handle('pal-storage:export-bundle', async (event, bytes) => {
+    assertAllowedIpcSender(event);
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength < 4 || bytes.byteLength > MAX_BUNDLE_BYTES || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+      return { success: false, error: 'Invalid ZIP bundle or bundle exceeds 40 MiB' };
+    }
+    const { dialog } = require('electron');
+    try {
+      const { filePath } = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), {
+        title: 'Valheim 모드 포함 실행 묶음 저장',
+        defaultPath: 'valheim-server-bundle.zip',
+        filters: [{ name: 'ZIP', extensions: ['zip'] }]
+      });
+      if (!filePath) return { success: false, canceled: true };
+      await fs.writeFile(filePath, bytes);
+      return { success: true, filePath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
   ipcMain.handle('pal-storage:load', (event) => {
     assertAllowedIpcSender(event);
     return loadSavedData();

@@ -4,7 +4,8 @@ const STORAGE_CHANNELS = Object.freeze({
   load: 'pal-storage:load',
   save: 'pal-storage:save',
   reset: 'pal-storage:reset',
-  exportYml: 'pal-storage:export-yml'
+  exportYml: 'pal-storage:export-yml',
+  exportBundle: 'pal-storage:export-bundle'
 });
 
 function requirePlainObject(value) {
@@ -28,6 +29,10 @@ const desktopBridge = Object.freeze({
       throw new TypeError('Content must be a string');
     }
     return ipcRenderer.invoke(STORAGE_CHANNELS.exportYml, content);
+  },
+  exportBundle: (bytes) => {
+    if (!(bytes instanceof Uint8Array)) throw new TypeError('Bundle must be bytes');
+    return ipcRenderer.invoke(STORAGE_CHANNELS.exportBundle, bytes);
   }
 });
 

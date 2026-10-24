@@ -132,6 +132,44 @@ p {
     color: var(--text-secondary);
 }
 
+.helper-text.validation-error {
+    color: var(--danger);
+    margin-bottom: var(--spacing-md);
+}
+
+[hidden] {
+    display: none !important;
+}
+
+.mod-textarea {
+    resize: vertical;
+    min-height: 110px;
+    font-family: var(--font-mono);
+    line-height: 1.5;
+}
+
+.mod-file-list {
+    list-style: none;
+}
+
+.mod-file-list li {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) 0;
+    overflow-wrap: anywhere;
+}
+
+.mod-config-editor {
+    display: grid;
+    gap: var(--spacing-sm);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin-top: var(--spacing-md);
+}
+
 /* App Container */
 .app-container {
     max-width: 1040px;
@@ -220,7 +258,7 @@ p {
 /* Creator Cards */
 .creator-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     gap: var(--spacing-lg);
 }
 
@@ -275,6 +313,8 @@ p {
 
 .card-content {
     flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .card-content h3 {
@@ -749,6 +789,7 @@ label {
 /* Global Actions */
 .global-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     margin-bottom: var(--spacing-lg);
 }
