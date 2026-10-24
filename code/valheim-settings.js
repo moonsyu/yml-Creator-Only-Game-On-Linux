@@ -32,7 +32,7 @@
     select('world', 'deathPenalty', '사망 페널티', '-modifier deathpenalty', [['casual', '캐주얼'], ['veryeasy', '매우 쉬움'], ['easy', '쉬움'], ['hard', '어려움'], ['hardcore', '하드코어']], { modifier: 'deathpenalty' });
     select('world', 'resources', '자원 획득량', '-modifier resources', [['muchless', '매우 적게'], ['less', '적게'], ['more', '많이'], ['muchmore', '매우 많이'], ['most', '최대']], { modifier: 'resources' });
     select('world', 'raids', '습격 빈도', '-modifier raids', [['none', '습격 없음'], ['muchless', '매우 드물게'], ['less', '드물게'], ['more', '자주'], ['muchmore', '매우 자주']], { modifier: 'raids' });
-    select('world', 'portals', '포탈·광물 이동 규칙', '-modifier portals', [['casual', '광물·금속 포함 모든 아이템 허용'], ['hard', '어려움'], ['veryhard', '포탈 사용 불가']], { modifier: 'portals', helper: '광물 포탈 허용은 기본 서버에서도 가능합니다. ValheimPlus 없이 이 항목만 선택해도 됩니다.' });
+    select('world', 'portals', '포탈·광물 이동 규칙', '-modifier portals', [['casual', '광물·금속 포탈 허용'], ['hard', '어려움'], ['veryhard', '포탈 사용 불가']], { modifier: 'portals', helper: '광물 포탈 허용은 기본 서버에서도 가능합니다. ValheimPlus 없이 이 항목만 선택해도 됩니다.' });
     for (const [key, label] of [['nobuildcost', '건축 재료 비용 없음'], ['playerevents', '플레이어 진행도 기반 습격'], ['passivemobs', '선제공격하지 않는 적'], ['nomap', '지도 사용 안 함']]) {
         select('world', key, label, `-setkey ${key}`, [['enabled', '활성화']], { worldKey: key, helper: '기존 설정 유지는 해제 명령이 아닙니다. 해제하려면 보통 프리셋으로 초기화 후 규칙을 다시 선택하세요.' });
     }
