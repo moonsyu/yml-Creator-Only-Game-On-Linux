@@ -89,6 +89,7 @@
                 '기존 설정은 보존하며, 편집란에 입력한 .cfg만 명시적으로 덮어씁니다. 교체 전 파일은 .yml-generator-backups에 보관합니다.\n' +
                 '묶음의 모드를 변경할 때는 먼저 docker compose down 으로 서버를 멈춘 뒤 파일을 교체하세요.\n' +
                 '월드 폴더는 삭제하지 마세요. 기존 설치 경로를 그대로 사용하는지 확인하세요.\n'
+                + '접속·관리 비밀번호 파일을 지정했다면 Docker 호스트에 해당 파일을 별도로 준비하세요. 비밀번호 파일은 이 묶음에 포함되지 않습니다.\n'
             )
         };
         for (const file of mods.files) entries['valheim-mods/uploads/' + file.id] = files.get(file.id);

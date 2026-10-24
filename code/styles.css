@@ -982,5 +982,10 @@ label {
 }
 
 .qol-fields:disabled { opacity: 0.6; }
+.valheim-option-group, .valheim-advanced { margin-top: var(--spacing-lg); }
+.valheim-option-group > .form-grid, .valheim-advanced .form-grid { margin-top: var(--spacing-md); }
+.valheim-advanced { border-top: 1px solid var(--border-color, #30363d); padding-top: var(--spacing-md); }
+.valheim-advanced > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+#section-valheim-qol, #section-valheim-mods { margin-top: var(--spacing-lg); }
 .qol-checkbox-label { display: flex; align-items: center; gap: 8px; }
 .qol-checkbox-label input { width: 18px; height: 18px; flex-shrink: 0; }

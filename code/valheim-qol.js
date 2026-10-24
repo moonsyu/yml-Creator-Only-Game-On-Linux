@@ -3,6 +3,8 @@
 
     // Keys and units follow Grantapher/ValheimPlus 0.10.3.0/valheim_plus.cfg.
     const fields = [
+        { key: 'maxPlayers', label: '최대 접속 인원', type: 'number', value: 10, min: 1, max: 128, step: 1, help: '기본 10명. 인원 확장은 ValheimPlus가 담당하며 각 PC에도 같은 모드가 필요합니다.' },
+        { key: 'disableServerPassword', label: '서버 접속 비밀번호 해제', type: 'boolean', value: false, help: '켜면 누구나 비밀번호 없이 접속할 수 있습니다. ValheimPlus 서버 기능입니다.' },
         { key: 'portalItems', label: '광물·금속 포탈 통과', type: 'boolean', value: false, help: '평소 포탈을 통과하지 못하는 아이템도 들고 이동합니다.' },
         { key: 'carryWeight', label: '기본 운반 무게', type: 'number', value: 300, min: 1, max: 10000, step: 1, help: '기본값 300. 메긴기오르드 등의 추가 효과는 별도로 더해집니다.' },
         { key: 'stackMultiplier', label: '아이템 스택 배수', type: 'number', value: 1, min: 1, max: 10, step: 0.1, help: '1배는 기본값, 2배는 한 칸에 쌓이는 최대 수량을 두 배로 늘립니다.' },
@@ -51,7 +53,7 @@
         };
         const percent = multiplier => Math.round((multiplier - 1) * 100);
         section('ValheimPlus', { enabled: true });
-        section('Server', { enabled: true, enforceMod: true, serverSyncsConfig: true });
+        section('Server', { enabled: true, enforceMod: true, serverSyncsConfig: true, maxPlayers: settings.maxPlayers, disableServerPassword: settings.disableServerPassword });
         // Write false/defaults as well, so turning a feature off updates an existing server.
         section('Items', { enabled: settings.portalItems || settings.stackMultiplier !== 1,
             noTeleportPrevention: settings.portalItems, itemStackMultiplier: percent(settings.stackMultiplier) });

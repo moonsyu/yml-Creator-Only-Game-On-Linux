@@ -37,7 +37,7 @@ jobs:
           cp code/index.html static-pages/index.html
           cp code/styles.css static-pages/styles.css
           cp code/app.js static-pages/app.js
-          cp code/valheim-mods.js code/valheim-qol.js code/valheim-installer-source.js static-pages/
+          cp code/valheim-mods.js code/valheim-qol.js code/valheim-settings.js code/valheim-installer-source.js static-pages/
           cp -r code/vendor static-pages/vendor
 
       - name: Upload Pages artifact

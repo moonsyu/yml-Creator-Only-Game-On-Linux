@@ -25,23 +25,80 @@ Core Keeper 설정과 볼륨 경로는 [escapingnetwork/core-keeper-dedicated �
 
 ### Valheim · 발헤임
 
-- `ghcr.io/community-valheim-tools/valheim-server:latest`
+- `lloesche/valheim-server:latest` (Docker Hub)
 - 서버·월드 이름, 5자 이상 접속 비밀번호, 서버 목록 공개 여부
 - Steam 접속 및 PlayFab 크로스플레이
 - 시작 UDP 포트 변경: 기본 `2456-2457`, 크로스플레이 사용 시 `2456-2458`
 - 관리자·차단·접속 허용 SteamID64 목록, 추가 서버 실행 인수
 - 시간대, PUID/PGID, 자동 업데이트·재시작·백업 주기와 보관 정책
 - 기본 서버 / BepInEx / ValheimPlus 선택
+- 공식 월드 프리셋, 전투·사망·자원·습격·포탈 규칙과 월드 키
+- 월드 저장 및 게임 자체 백업, 상태 HTTP, Supervisor 웹 관리, 로그 필터·Syslog·실행 훅
+- 비밀번호 파일을 Compose secrets로 연결, 추가 환경변수와 모드 .cfg 편집
 - 월드·설정(`/config`)과 서버 프로그램(`/opt/valheim`) 볼륨 분리
 
 Valheim 설정은 [community-valheim-tools/valheim-server-docker 공식 문서](https://github.com/community-valheim-tools/valheim-server-docker)를 따릅니다.
 게임 선택에서 Valheim을 적용한 다음 접속 비밀번호를 입력하고 접속 설정을 적용하면 YAML을 내려받을 수 있습니다. 필수 입력값이 잘못되면 미리보기에 오류를 표시하고 다운로드를 막습니다.
 기존 월드를 사용하려면 월드·설정 폴더의 `worlds_local`에 세이브를 넣고 월드 이름을 맞춰 주세요. 비워 둔 SteamID 목록은 기존 목록 파일을 유지합니다. 업데이트·재시작·백업 Cron 값을 비우면 해당 주기 작업을 끕니다.
 
+#### 화면 구성과 이미지 선정
+
+세 게임 모두 **1. 게임 선택 → 2. Docker 이미지 → 3. 접속 설정 → 4. 서버 옵션 → 5. YML 미리보기** 순서입니다. Valheim의 월드 규칙, 운영 설정, 모드 로더, 편의 설정, ZIP·DLL·CFG는 **4. 서버 옵션**에 모았습니다. 이 영역의 **적용 / 복원**은 모드와 편의 설정까지 함께 처리합니다. 접속 설정과 저장 경로는 다른 게임과 동일하게 별도로 적용합니다.
+
+2026-10-25 [Docker Hub 검색 API](https://hub.docker.com/v2/search/repositories/?query=valheim&page_size=100&ordering=-pull_count)에서 Valheim 전용 저장소를 다운로드 수 내림차순으로 비교했습니다. 다운로드 수가 비슷할 때는 별 수를 비교하는 기준입니다.
+
+| Docker Hub 이미지 | 다운로드 수 | 별 수 |
+| --- | ---: | ---: |
+| [lloesche/valheim-server](https://hub.docker.com/r/lloesche/valheim-server) | 35,154,490 | 220 |
+| [mbround18/valheim](https://hub.docker.com/r/mbround18/valheim) | 7,118,945 | 64 |
+| [arokan/raspiheim](https://hub.docker.com/r/arokan/raspiheim) | 487,767 | 11 |
+
+수치는 조회 시점 기준으로 변합니다. 가장 많은 `lloesche/valheim-server:latest`를 사용합니다. 이 저장소는 현재 community-valheim-tools 프로젝트의 Docker Hub 미러이며, 기존 GHCR 이미지와 같은 `/config`, `/opt/valheim`, 모드 설치 구성을 사용합니다. 확인한 이미지 digest는 `sha256:fde7829b12d39203e155b6209689b70234f8a27d12c4d48baf890cc2ae2c2df3`, 소스 리비전은 `0ab6cdcc16dd4d152d110553f997da340c73da2f`입니다. 생성 파일의 `latest`는 이후 새 이미지가 나오면 변경될 수 있습니다.
+
+#### 발헤임 서버 설정 범위
+
+[이미지 환경변수·훅 문서](https://github.com/community-valheim-tools/valheim-server-docker/blob/main/README.md), [실제 기본값 소스](https://github.com/community-valheim-tools/valheim-server-docker/blob/0ab6cdcc16dd4d152d110553f997da340c73da2f/defaults), [게임 공식 서버 명령](https://www.valheimgame.com/support/a-guide-to-dedicated-servers/)을 대조했습니다.
+
+| 설정 영역 | 생성기에서 조절하는 내용 |
+| --- | --- |
+| 접속 | 서버·월드 이름, 비밀번호 또는 비밀번호 파일, UDP 포트, 서버 목록 공개, 크로스플레이 |
+| 월드 규칙 | 7개 프리셋, 전투, 사망 페널티, 자원, 습격, 포탈, 건축 비용 없음, 플레이어별 습격, 수동적인 적, 지도 없음 |
+| 게임 저장 | 저장 주기, 자동 백업 개수, 짧은/긴 백업 간격, PlayFab 인스턴스 ID, 게임 로그 파일 |
+| 권한 | 관리자·차단·허용 목록, PUID/PGID, 파일 생성 umask |
+| 운영 | 시간대, 업데이트·재시작 Cron, 유휴 시에만 실행, SteamCMD 인수, 공개 테스트 버전 |
+| 컨테이너 백업 | 활성화, Cron, 저장 경로, 보관 일수·개수, 유휴 백업, 접속 종료 후 유예, ZIP 압축 |
+| 모드 | 기본/BepInEx/ValheimPlus, V+ 저장소·릴리스, Thunderstore, ZIP·DLL, CFG 편집, V+ 편의 설정 |
+| 상태·관리 HTTP | 활성화, 컨테이너/호스트 TCP 포트, 공개 주소, 상태 설정·JSON 경로, 관리 사용자·비밀번호·비밀번호 파일 |
+| 로그 | 빈 줄·UTF-8·일치·시작·끝·포함·정규식 필터, Syslog 호스트·포트·로컬 병행 |
+| 실행 훅 | Supervisor 시작 전, 초기화·백업·업데이트·최초 시작·재시작·접속 준비·게임 실행·종료·BepInEx 설정 작성 전후의 19개 명령 |
+| 확장 설정 | 추가 서버 인수, `KEY=value` 환경변수, 반복 로그 필터, 로그 이벤트 훅, 모든 모드 CFG 항목 |
+
+**광물 포탈만 필요하면** 서버 옵션의 **월드 난이도·플레이 규칙 → 포탈·광물 이동 규칙 → 광물·금속 포함 모든 아이템 허용**을 선택하고 적용하세요. `SERVER_ARGS`에 `-modifier portals casual`이 들어가며 모드 설치는 필요 없습니다. 프리셋을 선택하면 프리셋을 먼저, 개별 규칙을 나중에 전달합니다.
+
+월드 규칙의 **기존 설정 유지**는 저장된 규칙을 해제하지 않습니다. 기존 규칙을 기본값으로 되돌리려면 **보통 (기존 규칙 초기화)** 프리셋을 고른 뒤 원하는 규칙을 다시 선택하세요. 게임 자체 백업과 컨테이너 자동 백업은 서로 별개입니다. `-savedir`는 영구 저장 볼륨 `/config`로 관리하며, 호스트 저장 위치는 미리보기의 저장 경로에서 변경하세요. 공식 인수에는 월드 시드나 최대 인원 변경이 없으므로 시드가 정해진 기존 월드를 가져오거나 모드를 사용해야 합니다. 최대 인원은 ValheimPlus 편의 설정에서 지정할 수 있습니다.
+
+HTTP 기능은 기본으로 꺼져 있습니다. 켜면 지정한 TCP 포트도 Compose에 추가합니다. 기본 공개 주소는 `127.0.0.1`이며 Docker 호스트에서만 접근합니다. 상태 조회는 공개 서버에서만 지원합니다. 관리 페이지는 사용자와 비밀번호 또는 비밀번호 파일이 필요합니다. 비밀번호 파일 경로를 입력하면 Compose secret이 자동 연결됩니다. **생성기는 비밀번호 파일을 만들거나 ZIP에 담지 않으므로 Docker 호스트에 직접 준비해야 합니다.** 접속 비밀번호 파일의 내용은 5자 이상으로 준비하세요.
+
+고급 설정은 아래 방식으로 확장합니다.
+
+```text
+VPCFG_Server_maxPlayers=20
+BEPINEXCFG_Logging_DOT_Console_Enabled=true
+VALHEIM_LOG_FILTER_CONTAINS_Join=joined
+ON_VALHEIM_LOG_FILTER_CONTAINS_Join=echo "$SERVER_NAME"
+```
+
+한 줄에 하나씩, 값 바깥에 따옴표를 덧붙이지 않고 입력하세요. 화면에서 관리하는 환경변수와 중복하면 생성을 막고 해당 항목에서 수정하도록 안내합니다. 예를 들어 V+ 편의 설정을 직접 사용 중이면 최대 인원도 편의 설정에서 변경합니다. 이미지의 [기타 내부 환경변수](https://github.com/community-valheim-tools/valheim-server-docker/blob/main/defaults)도 추가 환경변수로 지정할 수 있습니다. 설정 경로 접두어처럼 생성기의 모드 동작과 충돌하는 변수는 제한합니다. `UPDATE_INTERVAL`·`BACKUPS_INTERVAL`은 이전 방식의 설정이며 Cron 사용을 권장합니다.
+
+모드 설치가 필요한 경우 `PRE_SUPERVISOR_HOOK`은 **설치 명령 → 실패 시 시작 중단 → 사용자 명령** 순서로 합칩니다. `$`는 Compose가 호스트 환경변수로 치환하지 않도록 이스케이프합니다. 추가 서버 인수는 이미지에서 공백으로 분리하므로 공백을 포함한 값은 지원하지 않습니다.
+
+**이미지 제한:** 문서에 있는 `IDLE_DATAGRAM_WINDOW`·`IDLE_DATAGRAM_MAX_COUNT`는 확인한 이미지 소스에서 각각 `3`·`30`으로 무조건 대입됩니다. 효과 없는 환경변수 입력을 허용하는 대신 이 제한을 화면에 표시합니다. 파생 값인 조회 포트는 시작 UDP 포트 + 1입니다.
+
 #### ValheimPlus 플레이 편의 설정
 
-Valheim을 선택하면 **5. ValheimPlus 플레이 편의 설정**에서 다음 기능을 직접 조절할 수 있습니다.
+Valheim을 선택하면 **4. 서버 옵션 → ValheimPlus 플레이 편의 설정**에서 다음 기능을 직접 조절할 수 있습니다.
 
+- 최대 접속 인원, 접속 비밀번호 해제
 - 광물·금속 포탈 통과, 기본 운반 무게, 아이템 스택 배수
 - 주변 상자 재료로 제작·건설, 상자 탐색 거리
 - 달리기·점프 스태미나 소모 감소: 전투 중에도 적용됩니다.
@@ -57,10 +114,10 @@ Valheim을 선택하면 **5. ValheimPlus 플레이 편의 설정**에서 다음 
 
 #### Valheim 모드와 설정을 함께 실행하기
 
-1. **6. 추가 Valheim 모드 설치·설정**에서 Thunderstore 모드 링크 또는 `제작자-모드명-1.2.3`을 한 줄에 하나씩 입력합니다. 버전 없는 ID도 지원합니다.
+1. **4. 서버 옵션 → 추가 Valheim 모드 설치·설정**에서 Thunderstore 모드 링크 또는 `제작자-모드명-1.2.3`을 한 줄에 하나씩 입력합니다. 버전 없는 ID도 지원합니다.
 2. PC에 있는 모드 **ZIP·DLL**을 함께 첨부할 수 있습니다. ZIP은 `BepInEx/plugins`, `plugins` 또는 DLL이 담긴 일반 모드 ZIP을 지원합니다. `manifest.json`의 의존 모드도 자동 설치합니다. DLL 단독 첨부 시 필요한 의존 모드는 직접 목록에 넣어 주세요.
 3. 모드가 생성한 **.cfg**를 불러와 편집하거나 파일 이름과 내용을 직접 입력합니다. 파일 이름은 `Example.cfg`처럼 BepInEx 설정 폴더 기준으로 입력합니다.
-4. **적용**을 누릅니다. 처음 모드를 추가하면 BepInEx가 선택되며, 서버 옵션에서 ValheimPlus로 변경할 수 있습니다. 모드 적용은 선택한 로더도 함께 적용합니다.
+4. 서버 옵션 맨 아래 **적용**을 누릅니다. 처음 모드를 추가하면 BepInEx가 선택되며, ValheimPlus 편의 기능을 직접 설정했다면 ValheimPlus가 선택됩니다. 월드 규칙·로더·모드·편의 설정을 함께 적용합니다.
 5. **모드 포함 실행 묶음 ZIP 다운로드**를 누르고 서버의 한 폴더에 **전체 압축 해제**합니다. 그 폴더에서 `docker compose up -d`를 실행합니다.
 
 묶음에는 `docker-compose.yml`, `valheim-mods/install.py`, 설치 목록과 첨부 파일, 실행 안내가 포함됩니다. 컨테이너의 시작 훅에서 모드 설치를 먼저 끝내며, 설치에 실패하면 게임 서버 시작을 중단합니다. 로그는 `docker compose logs -f valheim`으로 확인합니다. 생성기는 실행용 파일을 만들며, 브라우저에서 Docker 서버를 직접 시작하지는 않습니다.

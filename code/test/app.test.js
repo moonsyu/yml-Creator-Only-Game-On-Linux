@@ -58,6 +58,7 @@ function loadAppForTest() {
     TextEncoder,
     ValheimMods: require('../valheim-mods.js'),
     ValheimQol: require('../valheim-qol.js'),
+    ValheimSettings: require('../valheim-settings.js'),
     setTimeout,
     clearTimeout
   });
@@ -216,7 +217,7 @@ test('Valheim compose keeps world and server data and uses the documented Steam 
   const yaml = api.buildValheimComposeYaml(validValheimState(api));
 
   assert.match(yaml, /^services:\n  valheim:/);
-  assert.match(yaml, /image: ghcr\.io\/community-valheim-tools\/valheim-server:latest/);
+  assert.match(yaml, /image: lloesche\/valheim-server:latest/);
   assert.match(yaml, /stop_grace_period: 2m/);
   assert.match(yaml, /cap_add:\n      - SYS_NICE/);
   assert.match(yaml, /"2456-2457:2456-2457\/udp"/);
@@ -226,7 +227,7 @@ test('Valheim compose keeps world and server data and uses the documented Steam 
   assert.match(yaml, /"CROSSPLAY=false"/);
   assert.match(yaml, /"BACKUPS=true"/);
   assert.match(yaml, /"TZ=Asia\/Seoul"/);
-  assert.doesNotMatch(yaml, /ADMINLIST_IDS|BANNEDLIST_IDS|PERMITTEDLIST_IDS|9001|palworld|core-keeper/);
+  assert.doesNotMatch(yaml, /ADMINLIST_IDS|BANNEDLIST_IDS|PERMITTEDLIST_IDS|9001:9001|palworld|core-keeper/);
 });
 
 test('Valheim custom ports follow SERVER_PORT and include the third port for crossplay', () => {
@@ -504,4 +505,128 @@ test('saved uploads block incomplete bundles and old saves receive empty mod set
   api.generateComposeYaml();
   assert.equal(elements.get('btn-download-bundle').hidden, true);
   assert.equal(elements.get('btn-download-yml').disabled, false);
+});
+
+test('native world rules work without a mod loader and presets precede overrides', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  Object.assign(applied.valheimOptions, { worldPreset: 'normal', portals: 'casual', combat: 'easy', resources: 'more', raids: 'none', nobuildcost: 'enabled', saveInterval: 600, nativeBackups: 0, backupShort: 3600, backupLong: 7200, instanceId: 'qa-1' });
+  const yaml = api.buildValheimComposeYaml(applied);
+  assert.match(yaml, /SERVER_ARGS=-preset normal -modifier combat easy -modifier resources more -modifier raids none -modifier portals casual -setkey nobuildcost -saveinterval 600 -backups 0 -backupshort 3600 -backuplong 7200 -instanceid qa-1/);
+  assert.match(yaml, /BEPINEX=false/);
+  assert.match(yaml, /VALHEIM_PLUS=false/);
+  assert.doesNotMatch(yaml, /mod-bundle|VPCFG_/);
+});
+
+test('HTTP services publish only when enabled and password files use Compose secrets', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  applied.valheimConnection.serverPassword = '';
+  applied.valheimConnection.serverSecretFile = './private/server$pass.txt';
+  Object.assign(applied.valheimOptions, { statusHttp: true, statusHttpPort: 8081, statusHostPort: 18080,
+    supervisorHttp: true, supervisorHttpPort: 9002, supervisorHostPort: 19001, supervisorSecretFile: './private/admin.txt', supervisorHttpPass: 'must-not-appear' });
+  const yaml = api.buildValheimComposeYaml(applied);
+  assert.match(yaml, /127\.0\.0\.1:18080:8081\/tcp/);
+  assert.match(yaml, /127\.0\.0\.1:19001:9002\/tcp/);
+  assert.match(yaml, /SERVER_PASS_FILE=\/run\/secrets\/server_pass/);
+  assert.match(yaml, /SUPERVISOR_HTTP_PASS_FILE=\/run\/secrets\/supervisor_pass/);
+  assert.match(yaml, /secrets:\n  server_pass:\n    file: "\.\/private\/server\$\$pass.txt"/);
+  assert.doesNotMatch(yaml, /SERVER_PASS=|SUPERVISOR_HTTP_PASS=|must-not-appear/);
+  applied.valheimOptions.statusHttp = false;
+  applied.valheimOptions.supervisorHttp = false;
+  assert.doesNotMatch(api.buildValheimComposeYaml(applied), /\/tcp/);
+});
+
+test('invalid HTTP, Cron, world, numeric and extra settings block generation', () => {
+  const { api } = loadAppForTest();
+  for (const change of [
+    { statusHttp: true, statusBind: '999.0.0.1' },
+    { supervisorHttp: true },
+    { statusHttp: true, supervisorHttp: true, supervisorHttpPass: 'qa', supervisorHttpPort: 80 },
+    { updateCron: '60 * * * *' }, { backupsCron: '* * *' }, { restartCron: '*/0 * * * *' },
+    { permissionsUmask: '888' }, { saveInterval: 0 }, { nativeBackups: 1.5 }, { portals: 'unknown' },
+    { instanceId: 'two words' }, { serverArgs: '-savedir /tmp' }, { saveInterval: 600, serverArgs: '-saveinterval 900' },
+    { combat: 'easy', serverArgs: '-preset hard' }, { portals: 'casual', serverArgs: '-modifier portals hard' },
+    { extraEnvironment: 'SERVER_PORT=9000' }, { extraEnvironment: 'PRE_SUPERVISOR_HOOK=exit 0' },
+    { extraEnvironment: 'KEY=value\nKEY=second' }, { extraEnvironment: 'not-an-entry' },
+    { extraEnvironment: 'IDLE_DATAGRAM_WINDOW=10' }, { extraEnvironment: 'VPCFG_Server_maxPlayers=20' }
+  ]) {
+    const applied = validValheimState(api);
+    Object.assign(applied.valheimOptions, change);
+    assert.throws(() => api.buildValheimComposeYaml(applied), undefined, JSON.stringify(change));
+  }
+  const applied = validValheimState(api);
+  applied.valheimConnection.serverPublic = false;
+  applied.valheimOptions.statusHttp = true;
+  assert.throws(() => api.buildValheimComposeYaml(applied), /서버 목록 공개/);
+});
+
+test('extra mod configuration and lifecycle hooks preserve literals and mandatory installation', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  Object.assign(applied.valheimOptions, { modMode: 'valheimplus',
+    PRE_SUPERVISOR_HOOK: 'echo "$SERVER_NAME"\nprintf done', POST_BACKUP_HOOK: 'echo @BACKUP_FILE@',
+    extraEnvironment: 'VPCFG_Server_maxPlayers=20\nBEPINEXCFG_Logging_DOT_Console_Enabled=true\nVALHEIM_LOG_FILTER_CONTAINS_Join=joined\nON_VALHEIM_LOG_FILTER_CONTAINS_Join=echo "$SERVER_NAME"' });
+  const yaml = api.buildValheimComposeYaml(applied);
+  const entries = yaml.split('\n').filter(line => line.startsWith('      - "')).map(line => JSON.parse(line.slice(8)));
+  assert.ok(entries.includes('PRE_SUPERVISOR_HOOK=python3 /mod-bundle/install.py --bundle /mod-bundle --config /config || exit 1\necho "$$SERVER_NAME"\nprintf done'));
+  assert.ok(entries.includes('ON_VALHEIM_LOG_FILTER_CONTAINS_Join=echo "$$SERVER_NAME"'));
+  assert.match(yaml, /VPCFG_Server_maxPlayers=20/);
+  applied.valheimQol = require('../valheim-qol.js').preset();
+  assert.throws(() => api.buildValheimComposeYaml(applied), /VPCFG_Server_maxPlayers.*중복/);
+});
+
+test('one Valheim options action applies and restores rules, loader, configs and convenience together', () => {
+  const { api, dispatch, elements, output } = loadAppForTest();
+  api.setupVolumeAndGlobalListeners();
+  api.state.draft = validValheimState(api);
+  api.state.applied = validValheimState(api);
+  api.state.draft.valheimOptions.portals = 'casual';
+  api.state.draft.valheimQol = require('../valheim-qol.js').preset();
+  api.state.draft.valheimMods.configs = [{ name: 'Example.cfg', content: '[Example]\nenabled=true' }];
+  const click = selector => dispatch('click', { matches: value => value === selector, dataset: { section: 'valheimOptions' } });
+  api.renderAppSections();
+  assert.equal(elements.get('preview-title').textContent, '5. YML 미리보기');
+  assert.match(elements.get('section-options').innerHTML, /id="section-valheim-qol"/);
+  assert.match(elements.get('section-options').innerHTML, /월드 난이도/);
+  assert.doesNotMatch(elements.get('section-valheim-mods').innerHTML, /<h2>|action-valheim-mods/);
+  click('.btn-apply');
+  assert.match(output.textContent, /-modifier portals casual/);
+  assert.match(output.textContent, /VPCFG_Player_baseMaximumWeight=600/);
+  assert.equal(api.state.applied.valheimOptions.modMode, 'valheimplus');
+  assert.equal(api.state.applied.valheimMods.configs.length, 1);
+  api.state.draft.valheimOptions.portals = 'hard';
+  api.state.draft.valheimQol.carryWeight = 800;
+  api.state.draft.valheimMods.configs = [];
+  click('.btn-restore');
+  assert.equal(api.state.draft.valheimOptions.portals, 'casual');
+  assert.equal(api.state.draft.valheimQol.carryWeight, 600);
+  assert.equal(api.state.draft.valheimMods.configs.length, 1);
+});
+
+test('older Valheim settings gain new controls without resetting worlds or schedules', () => {
+  const { api } = loadAppForTest();
+  const saved = validValheimState(api);
+  saved.valheimOptions = { modMode: 'bepinex', updateCron: '', serverArgs: '-preset hard', backupsMaxAge: 14 };
+  delete saved.valheimConnection.serverSecretFile;
+  const restored = api.mergeSavedAppState(saved);
+  assert.equal(restored.valheimOptions.portals, '');
+  assert.equal(restored.valheimOptions.statusHttp, false);
+  assert.equal(restored.valheimConnection.serverSecretFile, '');
+  const yaml = api.buildValheimComposeYaml(restored);
+  assert.match(yaml, /SERVER_ARGS=-preset hard/);
+  assert.match(yaml, /UPDATE_CRON="/);
+  assert.match(yaml, /BACKUPS_MAX_AGE=14/);
+});
+
+test('password-free access requires explicit ValheimPlus selection and setting', () => {
+  const { api } = loadAppForTest();
+  const applied = validValheimState(api);
+  applied.valheimConnection.serverPassword = '';
+  applied.valheimOptions.modMode = 'valheimplus';
+  applied.valheimQol = { ...require('../valheim-qol.js').preset(), maxPlayers: 20, disableServerPassword: true };
+  assert.match(api.buildValheimComposeYaml(applied), /VPCFG_Server_maxPlayers=20/);
+  assert.match(api.buildValheimComposeYaml(applied), /VPCFG_Server_disableServerPassword=true/);
+  applied.valheimQol.disableServerPassword = false;
+  assert.throws(() => api.buildValheimComposeYaml(applied), /5자 이상/);
 });
