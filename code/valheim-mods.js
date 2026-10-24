@@ -80,6 +80,10 @@
                 '3. docker compose logs -f valheim 으로 모드 설치와 서버 시작을 확인하세요.\n\n' +
                 '서버 시작 전에 Thunderstore 모드와 의존 모드, 첨부 ZIP/DLL, .cfg 설정을 설치합니다.\n' +
                 '클라이언트에도 설치해야 하는 모드는 각 플레이어가 별도로 설치해야 합니다.\n' +
+                (applied.valheimOptions.modMode === 'valheimplus' ?
+                    'ValheimPlus는 서버와 각 PC에 같은 버전이 필요합니다. PC 설치: https://github.com/Grantapher/ValheimPlus/releases/latest\n' +
+                    '편의 설정에서 지정한 값은 서버 시작 시 valheim_plus.cfg에 반영되며, 같은 항목의 직접 입력값보다 우선합니다.\n' +
+                    '편의 기능을 해제할 때는 생성기에서 해당 기능을 끄거나 편의 기능 기본값을 적용하고 새 묶음으로 교체하세요. 기존 설정 유지는 이미 적용된 값을 되돌리지 않습니다.\n' : '') +
                 '처음 설치한 버전은 같은 묶음으로 재시작할 때 유지됩니다. 버전을 바꾸려면 모드 ID에 버전을 지정해 새 묶음을 만드세요.\n' +
                 'ZIP의 manifest.json에 있는 의존 모드는 자동 설치합니다. DLL만 첨부한 경우 필요한 의존 모드를 목록에 추가하세요.\n' +
                 '기존 설정은 보존하며, 편집란에 입력한 .cfg만 명시적으로 덮어씁니다. 교체 전 파일은 .yml-generator-backups에 보관합니다.\n' +

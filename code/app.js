@@ -244,6 +244,7 @@ const defaultDraftState = {
         configPath: "./valheim-config",
         dataPath: "./valheim-data"
     },
+    valheimQol: { ...ValheimQol.defaults },
     valheimMods: {
         packages: "",
         files: [],
@@ -603,6 +604,7 @@ function isValidAppState(obj) {
     if (obj.valheimConnection !== undefined && !isPlainObj(obj.valheimConnection)) return false;
     if (obj.valheimOptions !== undefined && !isPlainObj(obj.valheimOptions)) return false;
     if (obj.valheimVolume !== undefined && !isPlainObj(obj.valheimVolume)) return false;
+    if (obj.valheimQol !== undefined && !isPlainObj(obj.valheimQol)) return false;
     if (obj.valheimMods !== undefined && (!isPlainObj(obj.valheimMods) || typeof obj.valheimMods.packages !== 'string' ||
         !Array.isArray(obj.valheimMods.files) || !Array.isArray(obj.valheimMods.configs) ||
         obj.valheimMods.files.some(file => !isPlainObj(file) || typeof file.id !== 'string' || typeof file.name !== 'string' || !Number.isFinite(file.size) || file.size < 0) ||
@@ -623,6 +625,7 @@ function mergeSavedAppState(savedState) {
         valheimConnection: { ...defaultDraftState.valheimConnection, ...savedState.valheimConnection },
         valheimOptions: { ...defaultDraftState.valheimOptions, ...savedState.valheimOptions },
         valheimVolume: { ...defaultDraftState.valheimVolume, ...savedState.valheimVolume },
+        valheimQol: { ...defaultDraftState.valheimQol, ...savedState.valheimQol },
         valheimMods: { ...clone(defaultDraftState.valheimMods), ...savedState.valheimMods }
     };
 }
@@ -758,6 +761,7 @@ function init() {
     setupVolumeAndGlobalListeners();
     setupDownloadListener();
     setupValheimModsListeners();
+    setupValheimQolListeners();
     updateLocalStorageUI();
     setupLocalStorageListeners();
     renderAppSections();
@@ -768,7 +772,8 @@ function init() {
 }
 
 function renderActionButtons(sectionKey) {
-    const isDirty = !isEqual(state.draft[sectionKey], state.applied[sectionKey]);
+    const isDirty = !isEqual(state.draft[sectionKey], state.applied[sectionKey]) ||
+        (sectionKey === 'valheimQol' && state.draft.valheimQol.enabled && state.applied.valheimOptions.modMode !== 'valheimplus');
     return `
         <button type="button" class="btn btn-secondary btn-restore" data-section="${sectionKey}" ${!isDirty ? 'disabled' : ''}>복원</button>
         <button type="button" class="btn btn-primary btn-apply" data-section="${sectionKey}" ${!isDirty ? 'disabled' : ''}>적용</button>
@@ -793,6 +798,8 @@ function updateActionBars() {
     if (actionOptions) actionOptions.innerHTML = renderActionButtons(sections.options);
     const actionMods = document.getElementById('action-valheim-mods');
     if (actionMods) actionMods.innerHTML = renderActionButtons('valheimMods');
+    const actionQol = document.getElementById('action-valheim-qol');
+    if (actionQol) actionQol.innerHTML = renderActionButtons('valheimQol');
 }
 
 function setupVolumeAndGlobalListeners() {
@@ -802,6 +809,11 @@ function setupVolumeAndGlobalListeners() {
             state.applied[section] = clone(state.draft[section]);
             if (section === 'valheimMods') {
                 state.applied.valheimOptions.modMode = state.draft.valheimOptions.modMode;
+            }
+            if (section === 'valheimQol' && state.applied.valheimQol.enabled) {
+                state.draft.valheimOptions.modMode = 'valheimplus';
+                state.applied.valheimOptions.modMode = 'valheimplus';
+                renderServerOptions();
             }
             updateActionBars();
             generateComposeYaml();
@@ -825,6 +837,8 @@ function setupVolumeAndGlobalListeners() {
                 renderVolumeSettings();
             } else if (section === 'valheimMods') {
                 renderValheimMods();
+            } else if (section === 'valheimQol') {
+                renderValheimQol();
             }
             updateActionBars();
         }
@@ -910,16 +924,80 @@ function needsValheimModBundle(applied) {
     return applied.game === 'valheim' && applied.valheimOptions.modMode !== 'vanilla';
 }
 
+function renderValheimQol() {
+    const container = document.getElementById('section-valheim-qol');
+    if (!container) return;
+    container.hidden = state.draft.game !== 'valheim';
+    if (container.hidden) return;
+    const settings = state.draft.valheimQol;
+    container.innerHTML = `
+        <h2>5. ValheimPlus 플레이 편의 설정</h2>
+        <p class="section-desc">광물 포탈, 운반 무게, 상자 재료 사용, 스태미나와 생산 자동화를 설정합니다. 직접 설정 후 적용하면 ValheimPlus가 선택됩니다.</p>
+        <div class="form-group">
+            <label for="valheim-qol-mode">편의 설정 방식</label>
+            <select id="valheim-qol-mode" class="text-input">
+                <option value="keep" ${!settings.enabled ? 'selected' : ''}>기존 설정 유지</option>
+                <option value="custom" ${settings.enabled ? 'selected' : ''}>이 화면에서 직접 설정</option>
+            </select>
+            <p class="helper-text">기존 설정 유지는 서버 설정 파일을 그대로 사용합니다. 이미 적용한 기능을 끄려면 직접 설정에서 끄거나 기본값을 적용하세요.</p>
+        </div>
+        <div class="qol-presets">
+            <button type="button" id="btn-qol-recommended" class="btn btn-secondary">추천 편의값 채우기</button>
+            <button type="button" id="btn-qol-defaults" class="btn btn-secondary">편의 기능 기본값으로 채우기</button>
+        </div>
+        <p class="helper-text">추천값: 광물 포탈 허용 · 운반 무게 600 · 스택 2배 · 상자 재료 사용 · 달리기/점프 소모 25% 감소. 적용 버튼을 눌러 반영하세요.</p>
+        <fieldset class="qol-fields" ${!settings.enabled ? 'disabled' : ''}>
+            <legend>원하는 편의 기능</legend>
+            <div class="form-grid">${ValheimQol.fields.map(field => `
+                <div class="form-group">
+                    <label for="qol-${field.key}" class="${field.type === 'boolean' ? 'qol-checkbox-label' : ''}">
+                        ${field.type === 'boolean' ? `<input type="checkbox" id="qol-${field.key}" data-qol-key="${field.key}" ${settings[field.key] ? 'checked' : ''}>` : ''}
+                        ${escapeHTML(field.label)}
+                    </label>
+                    ${field.type === 'number' ? `<input type="number" id="qol-${field.key}" data-qol-key="${field.key}" class="text-input" min="${field.min}" max="${field.max}" step="${field.step}" value="${escapeHTML(settings[field.key])}">` : ''}
+                    <p class="helper-text">${escapeHTML(field.help)}</p>
+                </div>`).join('')}</div>
+        </fieldset>
+        <p class="helper-text">서버와 각 사용자 PC에 같은 버전의 ValheimPlus가 필요합니다. 서버 설정은 접속한 PC에 동기화됩니다. 직접 입력한 valheim_plus.cfg의 동일 항목보다 이 화면 값이 우선합니다.</p>
+        <a class="option-link" href="https://github.com/Grantapher/ValheimPlus/releases/latest" target="_blank" rel="noopener noreferrer">사용자 PC용 ValheimPlus 다운로드·설치 안내 ↗</a>
+        <div class="action-bar" id="action-valheim-qol"></div>
+    `;
+    updateActionBars();
+}
+
+function setupValheimQolListeners() {
+    const container = document.getElementById('section-valheim-qol');
+    if (!container) return;
+    container.addEventListener('click', event => {
+        if (event.target.id === 'btn-qol-recommended') state.draft.valheimQol = ValheimQol.preset();
+        else if (event.target.id === 'btn-qol-defaults') state.draft.valheimQol = { ...ValheimQol.defaults, enabled: true };
+        else return;
+        renderValheimQol();
+    });
+    container.addEventListener('change', event => {
+        if (event.target.id !== 'valheim-qol-mode') return;
+        state.draft.valheimQol.enabled = event.target.value === 'custom';
+        renderValheimQol();
+    });
+    container.addEventListener('input', event => {
+        const field = ValheimQol.fields.find(candidate => candidate.key === event.target.dataset.qolKey);
+        if (!field || !state.draft.valheimQol.enabled) return;
+        state.draft.valheimQol[field.key] = field.type === 'boolean' ? event.target.checked :
+            (event.target.value === '' ? null : Number(event.target.value));
+        updateActionBars();
+    });
+}
+
 function renderValheimMods() {
     const previewTitle = document.getElementById('preview-title');
-    if (previewTitle) previewTitle.textContent = `${state.draft.game === 'valheim' ? 6 : 5}. YML 미리보기`;
+    if (previewTitle) previewTitle.textContent = `${state.draft.game === 'valheim' ? 7 : 5}. YML 미리보기`;
     const container = document.getElementById('section-valheim-mods');
     if (!container) return;
     container.hidden = state.draft.game !== 'valheim';
     if (container.hidden) return;
     const mods = state.draft.valheimMods;
     container.innerHTML = `
-        <h2>5. Valheim 모드 설치·설정</h2>
+        <h2>6. 추가 Valheim 모드 설치·설정</h2>
         <p class="section-desc">Thunderstore 모드와 내 PC의 ZIP·DLL을 함께 넣을 수 있습니다. 모드를 적용한 뒤 실행 묶음 ZIP을 내려받으세요.</p>
         <div class="form-group">
             <label for="valheimPackages">Thunderstore 링크 또는 모드 ID</label>
@@ -1192,6 +1270,7 @@ function renderAppSections() {
     renderConnectionSettings();
     renderServerOptions();
     renderVolumeSettings();
+    renderValheimQol();
     renderValheimMods();
 }
 
@@ -2000,6 +2079,7 @@ function validateValheimSettings(applied, uploadedFiles) {
     }
     if (!['vanilla', 'bepinex', 'valheimplus'].includes(applied.valheimOptions.modMode)) errors.push('모드 로더를 다시 선택하세요.');
     errors.push(...ValheimMods.validate(applied.valheimMods, applied.valheimOptions.modMode, uploadedFiles));
+    errors.push(...ValheimQol.validate(applied.valheimQol, applied.valheimOptions.modMode));
     return errors;
 }
 
@@ -2045,6 +2125,7 @@ function buildValheimComposeYaml(applied) {
     });
     addEnv('BEPINEX', opts.modMode === 'bepinex');
     addEnv('VALHEIM_PLUS', opts.modMode === 'valheimplus');
+    for (const [key, value] of Object.entries(ValheimQol.environment(applied.valheimQol))) addEnv(key, value);
     if (needsValheimModBundle(applied)) addEnv('PRE_SUPERVISOR_HOOK', 'python3 /mod-bundle/install.py --bundle /mod-bundle --config /config || exit 1');
     return yaml;
 }

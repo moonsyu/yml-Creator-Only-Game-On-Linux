@@ -29,6 +29,8 @@ function loadAppForTest() {
     'bundle-help',
     'section-valheim-mods',
     'action-valheim-mods',
+    'section-valheim-qol',
+    'action-valheim-qol',
     'preview-title'
   ].map(id => [id, makeElement()]));
   const gameCards = ['palworld', 'corekeeper', 'valheim'].map(game => ({
@@ -55,6 +57,7 @@ function loadAppForTest() {
     window: {},
     TextEncoder,
     ValheimMods: require('../valheim-mods.js'),
+    ValheimQol: require('../valheim-qol.js'),
     setTimeout,
     clearTimeout
   });
@@ -295,6 +298,60 @@ test('Valheim mod loader selection cannot enable BepInEx and ValheimPlus togethe
   }
   applied.valheimOptions.modMode = 'unknown';
   assert.throws(() => api.buildValheimComposeYaml(applied), /모드 로더/);
+});
+
+test('Valheim convenience settings apply with their loader, restore, persist, and reset', () => {
+  const { api, elements, dispatch, output } = loadAppForTest();
+  api.setupVolumeAndGlobalListeners();
+  api.state.draft = validValheimState(api);
+  api.state.applied = validValheimState(api);
+  api.state.draft.valheimQol = require('../valheim-qol.js').preset();
+  api.renderAppSections();
+  assert.match(elements.get('section-valheim-qol').innerHTML, /광물·금속 포탈 통과/);
+  assert.match(elements.get('section-valheim-qol').innerHTML, /기본 운반 무게/);
+  assert.match(elements.get('section-valheim-qol').innerHTML, /추천 편의값 채우기/);
+  assert.doesNotMatch(api.buildValheimComposeYaml(api.state.applied), /VPCFG_/);
+
+  const click = (selector, section) => dispatch('click', { matches: value => value === selector, dataset: { section } });
+  click('.btn-apply', 'valheimQol');
+  assert.equal(api.state.draft.valheimOptions.modMode, 'valheimplus');
+  assert.equal(api.state.applied.valheimOptions.modMode, 'valheimplus');
+  assert.match(output.textContent, /VPCFG_Items_noTeleportPrevention=true/);
+  assert.match(output.textContent, /VPCFG_Player_baseMaximumWeight=600/);
+  assert.match(output.textContent, /VPCFG_Items_itemStackMultiplier=100/);
+  assert.match(output.textContent, /VPCFG_Stamina_runStaminaDrain=-25/);
+  assert.equal(elements.get('btn-download-yml').disabled, true);
+  assert.equal(elements.get('btn-download-bundle').disabled, false);
+  api.state.draft.valheimQol.carryWeight = 999;
+  click('.btn-restore', 'valheimQol');
+  assert.equal(api.state.draft.valheimQol.carryWeight, 600);
+  const saved = api.mergeSavedAppState(JSON.parse(JSON.stringify(api.state.applied)));
+  assert.equal(saved.valheimQol.carryWeight, 600);
+  assert.equal(api.buildValheimComposeYaml(saved), output.textContent);
+  for (const game of ['corekeeper', 'palworld', 'valheim']) api.setGame(game);
+  assert.equal(api.state.draft.valheimQol.carryWeight, 600);
+  click('#btn-reset-all');
+  assert.equal(api.state.draft.valheimQol.enabled, false);
+  assert.equal(elements.get('section-valheim-qol').hidden, true);
+});
+
+test('Valheim convenience errors block output, and old saves preserve manual config', () => {
+  const { api, elements, output } = loadAppForTest();
+  const legacy = validValheimState(api);
+  delete legacy.valheimQol;
+  const merged = api.mergeSavedAppState(legacy);
+  assert.equal(merged.valheimQol.enabled, false);
+  assert.doesNotMatch(api.buildValheimComposeYaml(merged), /VPCFG_/);
+  api.state.applied = merged;
+  merged.valheimQol.enabled = true;
+  api.generateComposeYaml();
+  assert.equal(output.textContent, '');
+  assert.match(elements.get('yaml-validation').textContent, /ValheimPlus가 필요/);
+  merged.valheimOptions.modMode = 'valheimplus';
+  merged.valheimQol.carryWeight = null;
+  api.generateComposeYaml();
+  assert.equal(elements.get('btn-download-bundle').disabled, true);
+  assert.match(elements.get('yaml-validation').textContent, /기본 운반 무게/);
 });
 
 test('Valheim escapes YAML and Compose interpolation in user text and volume paths', () => {
