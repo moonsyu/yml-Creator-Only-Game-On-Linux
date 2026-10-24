@@ -39,6 +39,16 @@ jobs:
           cp code/app.js static-pages/app.js
           cp code/valheim-mods.js code/valheim-qol.js code/valheim-settings.js code/valheim-installer-source.js static-pages/
           cp -r code/vendor static-pages/vendor
+          node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const file = 'static-pages/index.html';
+          const html = fs.readFileSync(file, 'utf8').replace(/(src|href)="([^":?]+\.(?:js|css))"/g, (_, attr, asset) => {
+            const hash = crypto.createHash('sha256').update(fs.readFileSync(`static-pages/${asset}`)).digest('hex').slice(0, 12);
+            return `${attr}="${asset}?v=${hash}"`;
+          });
+          fs.writeFileSync(file, html);
+          NODE
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
