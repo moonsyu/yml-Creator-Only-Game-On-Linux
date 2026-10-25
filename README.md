@@ -4,7 +4,20 @@
 
 Ubuntu와 Linux 서버에서 실행할 게임 전용 서버의 `docker-compose.yml`을 만드는 Electron 앱입니다. 데스크톱 앱과 웹 브라우저에서 설정을 입력하고 YAML을 미리 본 뒤 내려받을 수 있습니다.
 
-## 지원 게임
+## 지원 게임과 이미지 선정 기준
+
+게임마다 Docker Hub 전용 서버 이미지를 다운로드 수와 별(★) 수로 비교해 상위 2개를 제공합니다. 2026-10-25 기준이며, 두 기준 모두 순위가 같았습니다.
+
+| 게임 | 1위 | 2위 |
+| --- | --- | --- |
+| Palworld | `thijsvanloef/palworld-server-docker` (207만 · ★72) | `jammsen/palworld-dedicated-server` (45만 · ★64) |
+| Core Keeper | `escaping/core-keeper-dedicated` (48만 · ★9) | `arguser/core-keeper-dedicated` (6,294 · ★2, 2022년 이후 갱신 없음) |
+| Valheim | `lloesche/valheim-server` (3,521만 · ★220) | `mbround18/valheim:3` (713만 · ★64) |
+
+수치와 이미지 정보는 `code/image-catalog.js`에 있습니다. 모든 서버 설정에는 "무슨 설정인지"와 "설정하면 어떻게 되는지·추천값"을 보여 주는 도움말이 붙어 있으며, 내용은 `code/help-*.js`(mbround18 이미지는 `code/valheim-mbround.js`)에 있습니다.
+
+- **arguser (Core Keeper 2위)**: 월드 이름·번호·시드·Game ID·최대 인원만 설정할 수 있고 SDR(Game ID) 접속만 지원합니다.
+- **mbround18 (Valheim 2위)**: rootless 이미지라 Compose `user`로 실행 계정을 지정합니다. `MODS`에 적은 Thunderstore 모드를 시작할 때 자동으로 설치하고, Odin이 업데이트·백업·재시작 예약과 Discord 웹훅을 처리합니다. 저장 폴더는 월드·서버·백업 세 개입니다.
 
 ### Palworld
 

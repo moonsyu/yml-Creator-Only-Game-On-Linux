@@ -59,13 +59,15 @@ function loadAppForTest() {
     ValheimMods: require('../valheim-mods.js'),
     ValheimQol: require('../valheim-qol.js'),
     ValheimSettings: require('../valheim-settings.js'),
+    ValheimMbround: require('../valheim-mbround.js'),
+    ImageCatalog: require('../image-catalog.js'),
     setTimeout,
     clearTimeout
   });
   const appPath = path.join(__dirname, '..', 'app.js');
   const source = fs.readFileSync(appPath, 'utf8');
   vm.runInContext(
-    `${source}\n;globalThis.__testApi = { defaultDraftState, state, clone, isValidAppState, mergeSavedAppState, buildCoreKeeperComposeYaml, buildValheimComposeYaml, validateValheimSettings, generateComposeYaml, renderAppSections, setGame, setupVolumeAndGlobalListeners, parseCoreKeeperContentBundles, toggleCoreKeeperContentBundle };`,
+    `${source}\n;globalThis.__testApi = { defaultDraftState, state, clone, isValidAppState, mergeSavedAppState, buildCoreKeeperComposeYaml, buildValheimComposeYaml, buildValheimMbComposeYaml, validateValheimSettings, generateComposeYaml, renderAppSections, setGame, setupVolumeAndGlobalListeners, parseCoreKeeperContentBundles, toggleCoreKeeperContentBundle };`,
     context,
     { filename: appPath }
   );
@@ -586,7 +588,7 @@ test('one Valheim options action applies and restores rules, loader, configs and
   api.state.draft.valheimMods.configs = [{ name: 'Example.cfg', content: '[Example]\nenabled=true' }];
   const click = selector => dispatch('click', { matches: value => value === selector, dataset: { section: 'valheimOptions' } });
   api.renderAppSections();
-  assert.equal(elements.get('preview-title').textContent, '5. YML 미리보기');
+  assert.match(elements.get('section-options').innerHTML, /data-section="valheimOptions"|id="action-options"/);
   assert.match(elements.get('section-options').innerHTML, /id="section-valheim-qol"/);
   assert.match(elements.get('section-options').innerHTML, /월드 난이도/);
   assert.doesNotMatch(elements.get('section-valheim-mods').innerHTML, /<h2>|action-valheim-mods/);

@@ -210,7 +210,7 @@
         return { ...env, ...parseExtra(options.extraEnvironment) };
     }
 
-    const api = { image, groups, fields, defaults, parseExtra, argumentsFor, validate, environment };
+    const api = { image, groups, fields, defaults, parseExtra, argumentsFor, validate, validCron, environment };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     root.ValheimSettings = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

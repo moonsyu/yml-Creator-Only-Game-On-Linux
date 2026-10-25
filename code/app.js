@@ -1,6 +1,8 @@
 const defaultDraftState = {
     game: 'palworld',
     creator: 'thijsvanloef',
+    coreKeeperCreator: 'escaping',
+    valheimCreator: 'lloesche',
     connection: {
         serverName: "팰월드 서버",
         serverPassword: "",
@@ -233,6 +235,12 @@ const defaultDraftState = {
         packages: "",
         files: [],
         configs: []
+    },
+    valheimMbOptions: { ...ValheimMbround.defaults },
+    valheimMbVolume: {
+        savesPath: "./valheim/saves",
+        serverPath: "./valheim/server",
+        backupsPath: "./valheim/backups"
     }
 };
 
@@ -318,8 +326,8 @@ const OPTIONS_SCHEMA = {
         { key: 'showPlayerList', label: '플레이어 목록 표시', envT: 'SHOW_PLAYER_LIST', envJ: 'SHOW_PLAYER_LIST', type: 'boolean' },
         { key: 'banListUrl', label: '밴 목록 URL', envT: 'BAN_LIST_URL', envJ: 'BAN_LIST_URL', type: 'text' },
         { key: 'enablePredatorBossPal', label: '포식자 보스 팰 활성화', envT: 'ENABLE_PREDATOR_BOSS_PAL', envJ: 'ENABLE_PREDATOR_BOSS_PAL', type: 'boolean' },
-        { key: 'maxBuildingLimitNum', label: '최대 건물 제한 수', envT: 'MAX_BUILDING_LIMIT_NUM', envJ: 'MAX_BUILDING_LIMIT_NUM', type: 'number', min: 1, max: 100000, step: 100 },
-        { key: 'serverReplicatePawnCullDistance', label: '서버 복제 폰 컬링 거리', envT: 'SERVER_REPLICATE_PAWN_CULL_DISTANCE', envJ: 'SERVER_REPLICATE_PAWN_CULL_DISTANCE', type: 'number', min: 1, max: 100000, step: 100 },
+        { key: 'maxBuildingLimitNum', label: '최대 건물 제한 수', envT: 'MAX_BUILDING_LIMIT_NUM', envJ: 'MAX_BUILDING_LIMIT_NUM', type: 'number', min: 0, max: 100000, step: 100 },
+        { key: 'serverReplicatePawnCullDistance', label: '서버 복제 폰 컬링 거리', envT: 'SERVER_REPLICATE_PAWN_CULL_DISTANCE', envJ: 'SERVER_REPLICATE_PAWN_CULL_DISTANCE', type: 'number', min: 5000, max: 15000, step: 100 },
         { key: 'equipmentDurabilityDamageRate', label: '장비 내구도 손상 비율', envT: 'EQUIPMENT_DURABILITY_DAMAGE_RATE', envJ: 'EQUIPMENT_DURABILITY_DAMAGE_RATE', type: 'number', min: 0.1, max: 5, step: 0.1 },
         { key: 'itemContainerForceMarkDirtyInterval', label: '아이템 컨테이너 강제 갱신 간격', envT: 'ITEM_CONTAINER_FORCE_MARK_DIRTY_INTERVAL', envJ: 'ITEM_CONTAINER_FORCE_MARK_DIRTY_INTERVAL', type: 'number', min: 0.1, max: 60, step: 0.1 },
         { key: 'allowGlobalPalboxExport', label: '팰 박스 내보내기 허용', envT: 'ALLOW_GLOBAL_PALBOX_EXPORT', envJ: 'ALLOW_GLOBAL_PALBOX_EXPORT', type: 'boolean' },
@@ -422,10 +430,27 @@ const OPTIONS_SCHEMA = {
 const VALHEIM_OPTIONS_SCHEMA = ValheimSettings.fields;
 
 const GAME_SECTIONS = {
-    palworld: { connection: 'connection', options: 'serverOptions', volume: 'volume' },
-    corekeeper: { connection: 'coreKeeperConnection', options: 'coreKeeperOptions', volume: 'coreKeeperVolume' },
-    valheim: { connection: 'valheimConnection', options: 'valheimOptions', volume: 'valheimVolume' }
+    palworld: { creator: 'creator', connection: 'connection', options: 'serverOptions', volume: 'volume' },
+    corekeeper: { creator: 'coreKeeperCreator', connection: 'coreKeeperConnection', options: 'coreKeeperOptions', volume: 'coreKeeperVolume' },
+    valheim: { creator: 'valheimCreator', connection: 'valheimConnection', options: 'valheimOptions', volume: 'valheimVolume' }
 };
+const CREATOR_SECTIONS = Object.values(GAME_SECTIONS).map(sections => sections.creator);
+
+// The second Valheim image has its own option and volume layout; connection settings are shared.
+function sectionsFor(source = state.draft) {
+    const sections = GAME_SECTIONS[source.game];
+    if (source.game === 'valheim' && source.valheimCreator === 'mbround18') {
+        return { ...sections, options: 'valheimMbOptions', volume: 'valheimMbVolume' };
+    }
+    return sections;
+}
+
+function selectedImageId(source = state.draft) {
+    return source[GAME_SECTIONS[source.game].creator];
+}
+
+// arguser/core-keeper-dedicated (2022) only reads these variables.
+const CORE_KEEPER_ARGUSER_OPTIONS = ['worldIndex', 'worldSeed'];
 
 const CORE_KEEPER_OPTIONS_SCHEMA = [
     { key: 'worldIndex', label: '월드 인덱스', env: 'WORLD_INDEX', type: 'number', min: 0, max: 99, step: 1 },
@@ -553,10 +578,42 @@ function renderHintIcon(text, labelStr) {
     `;
 }
 
+// Help text lives in help-*.js (OptionHelp) or inline on a schema field (`help`).
+function getOptionHelp(helpKey, opt = {}) {
+    const library = typeof OptionHelp !== 'undefined' ? OptionHelp : {};
+    const entry = (helpKey && library[helpKey]) || opt.help || null;
+    if (entry) return entry;
+    return opt.helper ? { what: opt.helper } : null;
+}
+
+let helpPanelSeq = 0;
+
+function renderHelpBlock(helpKey, opt = {}, note = '') {
+    const help = getOptionHelp(helpKey, opt);
+    if (!help) return '';
+    const panelId = `help-panel-${++helpPanelSeq}`;
+    const details = [
+        help.effect ? `<div class="option-help-item"><span class="option-help-term">설정하면 어떻게 되나요?</span><p>${escapeHTML(help.effect)}</p></div>` : '',
+        help.tip ? `<div class="option-help-item"><span class="option-help-term">추천 · 주의</span><p>${escapeHTML(help.tip)}</p></div>` : '',
+        note ? `<div class="option-help-item"><span class="option-help-term">이 이미지에서</span><p>${escapeHTML(note)}</p></div>` : ''
+    ].join('');
+    return `
+        <div class="option-help-block">
+            <p class="option-help-what">${escapeHTML(help.what || '')}</p>
+            ${details ? `
+                <button type="button" class="help-toggle" aria-expanded="false" aria-controls="${panelId}">효과·추천 보기</button>
+                <div class="option-help" id="${panelId}">${details}</div>
+            ` : ''}
+        </div>
+    `;
+}
+
 function isValidAppState(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
     if (obj.creator !== 'thijsvanloef' && obj.creator !== 'jammsen') return false;
     if (obj.game !== undefined && !Object.hasOwn(GAME_SECTIONS, obj.game)) return false;
+    if (obj.coreKeeperCreator !== undefined && !ImageCatalog.find('corekeeper', obj.coreKeeperCreator)) return false;
+    if (obj.valheimCreator !== undefined && !ImageCatalog.find('valheim', obj.valheimCreator)) return false;
     const isPlainObj = val => val !== null && typeof val === 'object' && !Array.isArray(val);
     if (!isPlainObj(obj.connection) || !isPlainObj(obj.serverOptions) || !isPlainObj(obj.volume)) return false;
     if (obj.coreKeeperConnection !== undefined && !isPlainObj(obj.coreKeeperConnection)) return false;
@@ -566,6 +623,8 @@ function isValidAppState(obj) {
     if (obj.valheimOptions !== undefined && !isPlainObj(obj.valheimOptions)) return false;
     if (obj.valheimVolume !== undefined && !isPlainObj(obj.valheimVolume)) return false;
     if (obj.valheimQol !== undefined && !isPlainObj(obj.valheimQol)) return false;
+    if (obj.valheimMbOptions !== undefined && !isPlainObj(obj.valheimMbOptions)) return false;
+    if (obj.valheimMbVolume !== undefined && !isPlainObj(obj.valheimMbVolume)) return false;
     if (obj.valheimMods !== undefined && (!isPlainObj(obj.valheimMods) || typeof obj.valheimMods.packages !== 'string' ||
         !Array.isArray(obj.valheimMods.files) || !Array.isArray(obj.valheimMods.configs) ||
         obj.valheimMods.files.some(file => !isPlainObj(file) || typeof file.id !== 'string' || typeof file.name !== 'string' || !Number.isFinite(file.size) || file.size < 0) ||
@@ -587,7 +646,9 @@ function mergeSavedAppState(savedState) {
         valheimOptions: { ...defaultDraftState.valheimOptions, ...savedState.valheimOptions },
         valheimVolume: { ...defaultDraftState.valheimVolume, ...savedState.valheimVolume },
         valheimQol: { ...defaultDraftState.valheimQol, ...savedState.valheimQol },
-        valheimMods: { ...clone(defaultDraftState.valheimMods), ...savedState.valheimMods }
+        valheimMods: { ...clone(defaultDraftState.valheimMods), ...savedState.valheimMods },
+        valheimMbOptions: { ...defaultDraftState.valheimMbOptions, ...savedState.valheimMbOptions },
+        valheimMbVolume: { ...defaultDraftState.valheimMbVolume, ...savedState.valheimMbVolume }
     };
 }
 
@@ -725,6 +786,7 @@ function init() {
     setupValheimQolListeners();
     updateLocalStorageUI();
     setupLocalStorageListeners();
+    restoreHelpPreference();
     renderAppSections();
     updateActionBars();
     generateComposeYaml();
@@ -732,10 +794,26 @@ function init() {
     loadInitialData();
 }
 
-function renderActionButtons(sectionKey) {
-    const isDirty = !isEqual(state.draft[sectionKey], state.applied[sectionKey]) ||
+function isSectionDirty(sectionKey) {
+    return !isEqual(state.draft[sectionKey], state.applied[sectionKey]) ||
         (sectionKey === 'valheimOptions' && (!isEqual(state.draft.valheimQol, state.applied.valheimQol) || !isEqual(state.draft.valheimMods, state.applied.valheimMods))) ||
         (sectionKey === 'valheimQol' && state.draft.valheimQol.enabled && state.applied.valheimOptions.modMode !== 'valheimplus');
+}
+
+// Step order shown in the stepper and used by "apply all".
+function currentStepSections() {
+    const sections = sectionsFor();
+    return [
+        { step: 'game', section: 'game', label: '게임' },
+        { step: 'creator', section: sections.creator, label: '이미지' },
+        { step: 'connection', section: sections.connection, label: '접속' },
+        { step: 'options', section: sections.options, label: '서버 옵션' },
+        { step: 'volume', section: sections.volume, label: '저장 경로' }
+    ];
+}
+
+function renderActionButtons(sectionKey) {
+    const isDirty = isSectionDirty(sectionKey);
     return `
         <button type="button" class="btn btn-secondary btn-restore" data-section="${sectionKey}" ${!isDirty ? 'disabled' : ''}>복원</button>
         <button type="button" class="btn btn-primary btn-apply" data-section="${sectionKey}" ${!isDirty ? 'disabled' : ''}>적용</button>
@@ -743,13 +821,13 @@ function renderActionButtons(sectionKey) {
 }
 
 function updateActionBars() {
-    const sections = GAME_SECTIONS[state.draft.game];
+    const sections = sectionsFor();
     const actionGame = document.getElementById('action-game');
     if (actionGame) actionGame.innerHTML = renderActionButtons('game');
 
     const actionCreator = document.getElementById('action-creator');
-    if (actionCreator) actionCreator.innerHTML = state.draft.game === 'palworld' ? renderActionButtons('creator') : '';
-    
+    if (actionCreator) actionCreator.innerHTML = renderActionButtons(sections.creator);
+
     const actionVolume = document.getElementById('action-volume');
     if (actionVolume) actionVolume.innerHTML = renderActionButtons(sections.volume);
     
@@ -762,64 +840,109 @@ function updateActionBars() {
     if (actionMods) actionMods.innerHTML = renderActionButtons('valheimMods');
     const actionQol = document.getElementById('action-valheim-qol');
     if (actionQol) actionQol.innerHTML = renderActionButtons('valheimQol');
+    updatePendingState();
+}
+
+// Stepper dots and the floating "unapplied changes" bar.
+function updatePendingState() {
+    const steps = currentStepSections();
+    const dirty = steps.filter(step => isSectionDirty(step.section));
+    if (typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('[data-step-link]').forEach(link => {
+            const step = steps.find(item => item.step === link.dataset.stepLink);
+            link.classList.toggle?.('is-dirty', Boolean(step && isSectionDirty(step.section)));
+        });
+    }
+    const bar = document.getElementById('pending-bar');
+    const text = document.getElementById('pending-text');
+    if (bar) bar.hidden = dirty.length === 0;
+    if (text) text.textContent = dirty.length ? `적용하지 않은 변경: ${dirty.map(step => step.label).join(' · ')}` : '';
+}
+
+function applySection(section) {
+    state.applied[section] = clone(state.draft[section]);
+    if (section === 'valheimOptions') {
+        state.applied.valheimQol = clone(state.draft.valheimQol);
+        state.applied.valheimMods = clone(state.draft.valheimMods);
+        if (state.applied.valheimQol.enabled) {
+            state.draft.valheimOptions.modMode = 'valheimplus';
+            state.applied.valheimOptions.modMode = 'valheimplus';
+            const loader = document.getElementById('modMode');
+            if (loader) loader.value = 'valheimplus';
+        }
+    }
+    if (section === 'valheimMods') {
+        state.applied.valheimOptions.modMode = state.draft.valheimOptions.modMode;
+    }
+    if (section === 'valheimQol' && state.applied.valheimQol.enabled) {
+        state.draft.valheimOptions.modMode = 'valheimplus';
+        state.applied.valheimOptions.modMode = 'valheimplus';
+        renderServerOptions();
+    }
+}
+
+function restoreSection(section) {
+    state.draft[section] = clone(state.applied[section]);
+    if (section === 'valheimOptions') {
+        state.draft.valheimQol = clone(state.applied.valheimQol);
+        state.draft.valheimMods = clone(state.applied.valheimMods);
+    }
+}
+
+function renderAfterRestore(section) {
+    const sections = sectionsFor();
+    if (section === 'game' || CREATOR_SECTIONS.includes(section)) {
+        renderAppSections();
+    } else if (section === sections.connection) {
+        renderConnectionSettings();
+    } else if (section === sections.options) {
+        renderServerOptions();
+    } else if (section === sections.volume) {
+        renderVolumeSettings();
+    } else if (section === 'valheimMods') {
+        renderValheimMods();
+    } else if (section === 'valheimQol') {
+        renderValheimQol();
+    }
+}
+
+function applyAllSections() {
+    for (const { section } of currentStepSections()) {
+        if (isSectionDirty(section)) applySection(section);
+    }
+    renderAppSections();
+    updateActionBars();
+    generateComposeYaml();
+}
+
+function restoreAllSections() {
+    // Restore the game first so the remaining sections follow the applied game.
+    restoreSection('game');
+    for (const { section } of currentStepSections()) restoreSection(section);
+    renderAppSections();
+    updateActionBars();
 }
 
 function setupVolumeAndGlobalListeners() {
     document.addEventListener('click', (e) => {
         if (e.target.matches('.btn-apply')) {
-            const section = e.target.dataset.section;
-            state.applied[section] = clone(state.draft[section]);
-            if (section === 'valheimOptions') {
-                state.applied.valheimQol = clone(state.draft.valheimQol);
-                state.applied.valheimMods = clone(state.draft.valheimMods);
-                if (state.applied.valheimQol.enabled) {
-                    state.draft.valheimOptions.modMode = 'valheimplus';
-                    state.applied.valheimOptions.modMode = 'valheimplus';
-                    const loader = document.getElementById('modMode');
-                    if (loader) loader.value = 'valheimplus';
-                }
-            }
-            if (section === 'valheimMods') {
-                state.applied.valheimOptions.modMode = state.draft.valheimOptions.modMode;
-            }
-            if (section === 'valheimQol' && state.applied.valheimQol.enabled) {
-                state.draft.valheimOptions.modMode = 'valheimplus';
-                state.applied.valheimOptions.modMode = 'valheimplus';
-                renderServerOptions();
-            }
+            applySection(e.target.dataset.section);
             updateActionBars();
             generateComposeYaml();
         }
-        
+
         if (e.target.matches('.btn-restore')) {
             const section = e.target.dataset.section;
-            state.draft[section] = clone(state.applied[section]);
-            if (section === 'valheimOptions') {
-                state.draft.valheimQol = clone(state.applied.valheimQol);
-                state.draft.valheimMods = clone(state.applied.valheimMods);
-            }
-            
-            if (section === 'game') {
-                renderAppSections();
-            } else if (section === 'creator') {
-                renderCreatorSection();
-                renderConnectionSettings();
-                renderServerOptions();
-            } else if (section === GAME_SECTIONS[state.draft.game].connection) {
-                renderConnectionSettings();
-            } else if (section === GAME_SECTIONS[state.draft.game].options) {
-                renderServerOptions();
-            } else if (section === GAME_SECTIONS[state.draft.game].volume) {
-                renderVolumeSettings();
-            } else if (section === 'valheimMods') {
-                renderValheimMods();
-            } else if (section === 'valheimQol') {
-                renderValheimQol();
-            }
+            restoreSection(section);
+            renderAfterRestore(section);
             updateActionBars();
         }
-        
+
+        if (e.target.matches('#btn-apply-all')) applyAllSections();
+        if (e.target.matches('#btn-restore-all')) restoreAllSections();
+
         if (e.target.matches('#btn-reset-all')) {
+            if (typeof confirm === 'function' && !confirm('모든 설정을 기본값으로 되돌릴까요? 적용한 설정도 함께 초기화됩니다.')) return;
             state.draft = clone(defaultDraftState);
             state.applied = clone(defaultDraftState);
             valheimModFiles.clear();
@@ -832,7 +955,7 @@ function setupVolumeAndGlobalListeners() {
 
     document.addEventListener('input', (e) => {
         if (e.target.matches('[data-volume-key]')) {
-            const volumeState = state.draft[GAME_SECTIONS[state.draft.game].volume];
+            const volumeState = state.draft[sectionsFor().volume];
             volumeState[e.target.dataset.volumeKey] = e.target.value;
             updateActionBars();
         }
@@ -897,7 +1020,7 @@ function setupDownloadListener() {
 }
 
 function needsValheimModBundle(applied) {
-    return applied.game === 'valheim' && applied.valheimOptions.modMode !== 'vanilla';
+    return applied.game === 'valheim' && applied.valheimCreator !== 'mbround18' && applied.valheimOptions.modMode !== 'vanilla';
 }
 
 function renderValheimQol() {
@@ -964,8 +1087,6 @@ function setupValheimQolListeners() {
 }
 
 function renderValheimMods() {
-    const previewTitle = document.getElementById('preview-title');
-    if (previewTitle) previewTitle.textContent = '5. YML 미리보기';
     const container = document.getElementById('section-valheim-mods');
     if (!container) return;
     container.hidden = state.draft.game !== 'valheim';
@@ -1122,9 +1243,29 @@ function setupEventListeners() {
         const creatorCard = e.target.closest('.creator-card[data-creator]');
         if (creatorCard) {
             const selectedCreator = creatorCard.dataset.creator;
-            if (selectedCreator && selectedCreator !== state.draft.creator) {
+            if (selectedCreator && selectedCreator !== selectedImageId()) {
                 setCreator(selectedCreator);
             }
+            return;
+        }
+
+        const helpToggle = e.target.closest('.help-toggle');
+        if (helpToggle) {
+            const panel = document.getElementById(helpToggle.getAttribute('aria-controls'));
+            const open = helpToggle.getAttribute('aria-expanded') !== 'true';
+            helpToggle.setAttribute('aria-expanded', String(open));
+            helpToggle.textContent = open ? '효과·추천 접기' : '효과·추천 보기';
+            if (panel) panel.classList.toggle('open', open);
+            return;
+        }
+
+        if (e.target.closest('#btn-help-all')) {
+            setHelpExpanded(!document.body.classList.contains('help-expanded'));
+            return;
+        }
+
+        if (e.target.closest('#btn-copy-yml')) {
+            copyYamlToClipboard();
             return;
         }
 
@@ -1149,6 +1290,38 @@ function setupEventListeners() {
     });
 }
 
+const HELP_EXPANDED_KEY = 'yml-generator:help-expanded';
+
+function setHelpExpanded(expanded) {
+    document.body.classList.toggle('help-expanded', expanded);
+    const button = document.getElementById('btn-help-all');
+    if (button) {
+        button.setAttribute('aria-pressed', String(expanded));
+        button.textContent = expanded ? '설정 설명 모두 접기' : '설정 설명 모두 펼치기';
+    }
+    try { localStorage.setItem(HELP_EXPANDED_KEY, expanded ? '1' : '0'); } catch (error) { /* storage may be unavailable */ }
+}
+
+function restoreHelpPreference() {
+    let expanded = false;
+    try { expanded = localStorage.getItem(HELP_EXPANDED_KEY) === '1'; } catch (error) { /* storage may be unavailable */ }
+    if (document.body) setHelpExpanded(expanded);
+}
+
+async function copyYamlToClipboard() {
+    const output = document.getElementById('yml-output');
+    const button = document.getElementById('btn-copy-yml');
+    const text = output ? output.textContent : '';
+    if (!text || !button) return;
+    try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = '복사됨 ✓';
+    } catch (error) {
+        button.textContent = '복사 실패';
+    }
+    setTimeout(() => { button.textContent = '복사'; }, 1800);
+}
+
 function setGame(gameId) {
     if (!Object.hasOwn(GAME_SECTIONS, gameId)) return;
     state.draft.game = gameId;
@@ -1157,10 +1330,9 @@ function setGame(gameId) {
 }
 
 function setCreator(creatorId) {
-    state.draft.creator = creatorId;
-    renderCreatorSection();
-    renderConnectionSettings();
-    renderServerOptions();
+    if (!ImageCatalog.find(state.draft.game, creatorId)) return;
+    state.draft[GAME_SECTIONS[state.draft.game].creator] = creatorId;
+    renderAppSections();
     updateActionBars();
 }
 
@@ -1180,64 +1352,47 @@ function renderCreatorSection() {
     const container = document.getElementById('section-creator');
     if (!container) return;
 
-    if (state.draft.game === 'valheim') {
-        container.innerHTML = `
-            <h2>2. Valheim Docker 이미지</h2>
-            <p class="section-desc">Docker Hub에서 다운로드 수가 가장 많은 Valheim 전용 서버 이미지입니다. 자동 업데이트·백업·BepInEx·ValheimPlus를 지원합니다.</p>
-            <div class="creator-cards">
-                <div class="creator-card active fixed-card" aria-label="lloesche 이미지 선택됨">
-                    <div class="card-icon">⚔️</div>
-                    <div class="card-content">
-                        <h3>lloesche</h3>
-                        <p>${ValheimSettings.image}</p>
-                        <span class="badge">Docker Hub 다운로드 1위</span>
+    const game = state.draft.game;
+    const catalog = ImageCatalog.games[game];
+    const selected = selectedImageId();
+    const appliedHere = state.applied.game === game ? selectedImageId(state.applied) : null;
+    const cards = catalog.images.map(image => {
+        const isActive = image.id === selected;
+        const pullRank = ImageCatalog.rank(game, 'pulls', image.id);
+        const starRank = ImageCatalog.rank(game, 'stars', image.id);
+        return `
+            <button type="button" class="creator-card image-card ${isActive ? 'active' : ''}" data-creator="${escapeHTML(image.id)}" aria-pressed="${isActive}" aria-label="${escapeHTML(image.repo)} 선택">
+                <div class="card-icon" aria-hidden="true">${image.icon}</div>
+                <div class="card-content">
+                    <div class="image-card-head">
+                        <h3>${escapeHTML(image.repo.split('/')[0])}</h3>
+                        ${appliedHere === image.id ? '<span class="chip chip-applied">YML 적용 중</span>' : ''}
                     </div>
-                </div>
-            </div>
-            <p class="helper-text">2026-10-25 확인: 약 3,515만 다운로드 · 별 220개. 유지보수: community-valheim-tools.</p>
-            <a class="option-link" href="https://hub.docker.com/r/lloesche/valheim-server" target="_blank" rel="noopener noreferrer">Docker Hub 이미지·설정 문서 ↗</a>
-        `;
-        return;
-    }
-
-    if (state.draft.game === 'corekeeper') {
-        container.innerHTML = `
-            <h2>2. Core Keeper Docker 이미지</h2>
-            <p class="section-desc">공식 설정 문서가 제공되는 커뮤니티 이미지로 Compose 파일을 구성합니다.</p>
-            <div class="creator-cards">
-                <div class="creator-card active fixed-card" aria-label="escaping 이미지 선택됨">
-                    <div class="card-icon">⛏️</div>
-                    <div class="card-content">
-                        <h3>escapingnetwork</h3>
-                        <p>escaping/core-keeper-dedicated:latest</p>
-                        <span class="badge">Core Keeper</span>
+                    <p class="image-ref">${escapeHTML(`${image.repo}:${image.tag}`)}</p>
+                    <div class="rank-badges">
+                        <span class="badge ${pullRank === 1 ? 'badge-gold' : 'badge-silver'}">다운로드 ${pullRank}위</span>
+                        <span class="badge ${starRank === 1 ? 'badge-gold' : 'badge-silver'}">인기(★) ${starRank}위</span>
                     </div>
+                    <dl class="image-stats">
+                        <div><dt>다운로드</dt><dd>${ImageCatalog.formatCount(image.pulls)}회</dd></div>
+                        <div><dt>Docker Hub ★</dt><dd>${image.stars.toLocaleString('ko-KR')}</dd></div>
+                        <div><dt>최근 갱신</dt><dd>${escapeHTML(image.updated)}</dd></div>
+                    </dl>
+                    <p class="image-summary">${escapeHTML(image.summary)}</p>
+                    <ul class="image-traits">${image.traits.map(trait => `<li>${escapeHTML(trait)}</li>`).join('')}</ul>
+                    ${image.warning ? `<p class="image-warning">⚠ ${escapeHTML(image.warning)}</p>` : ''}
                 </div>
-            </div>
+            </button>
         `;
-        return;
-    }
+    }).join('');
+    const links = catalog.images.map(image => `<a class="option-link" href="${escapeHTML(image.docs)}" target="_blank" rel="noopener noreferrer">${escapeHTML(image.repo)} 문서 <span aria-hidden="true">↗</span></a>`).join('');
 
     container.innerHTML = `
-        <h2>2. Palworld Docker 이미지 선택 ${renderHintIcon('사용할 Palworld 서버의 베이스 이미지를 제공하는 제작자를 선택합니다.', 'Docker 이미지 선택')}</h2>
-        <p class="section-desc">사용할 Docker 이미지의 제작자를 선택해주세요.</p>
-        <div class="creator-cards">
-            <button class="creator-card ${state.draft.creator === 'thijsvanloef' ? 'active' : ''}" data-creator="thijsvanloef" aria-label="thijsvanloef 선택" aria-pressed="${state.draft.creator === 'thijsvanloef'}">
-                <div class="card-icon">🚀</div>
-                <div class="card-content">
-                    <h3>thijsvanloef</h3>
-                    <p>thijsvanloef/palworld-server-docker</p>
-                    <span class="badge">추천</span>
-                </div>
-            </button>
-            <button class="creator-card ${state.draft.creator === 'jammsen' ? 'active' : ''}" data-creator="jammsen" aria-label="jammsen 선택" aria-pressed="${state.draft.creator === 'jammsen'}">
-                <div class="card-icon">⚡</div>
-                <div class="card-content">
-                    <h3>jammsen</h3>
-                    <p>jammsen/palworld-dedicated-server</p>
-                </div>
-            </button>
-        </div>
+        <h2>2. ${escapeHTML(catalog.label)} Docker 이미지 선택</h2>
+        <p class="section-desc">Docker Hub에서 ${escapeHTML(catalog.label)} 전용 서버 이미지를 다운로드 수와 별(★) 수로 비교해 상위 2개를 골랐습니다. 이미지마다 지원하는 설정이 달라 아래 접속·옵션 화면이 함께 바뀝니다.</p>
+        <div class="creator-cards">${cards}</div>
+        <p class="helper-text">${escapeHTML(ImageCatalog.checkedAt)} Docker Hub 기준 수치입니다. 다운로드 수와 별 수는 계속 바뀝니다.</p>
+        <nav class="option-links" aria-label="이미지 문서">${links}</nav>
         <div class="action-bar" id="action-creator"></div>
     `;
 }
@@ -1256,7 +1411,19 @@ function renderVolumeSettings() {
     const container = document.getElementById('volume-settings-fields');
     if (!container) return;
 
-    if (state.draft.game === 'valheim') {
+    if (state.draft.game === 'valheim' && state.draft.valheimCreator === 'mbround18') {
+        const volume = state.draft.valheimMbVolume;
+        container.innerHTML = [
+            ['savesPath', '월드 저장 폴더', './valheim/saves', '/home/steam/.config/unity3d/IronGate/Valheim에 연결됩니다. 월드(worlds_local)와 관리자·차단 목록이 저장되며 지우면 월드가 사라집니다.'],
+            ['serverPath', '서버 프로그램 폴더', './valheim/server', '/home/steam/valheim에 연결되어 서버 실행 파일과 설치한 모드를 유지합니다. 지워도 월드는 남지만 다음 시작 때 다시 내려받습니다.'],
+            ['backupsPath', '백업 폴더', './valheim/backups', '/home/steam/backups에 연결됩니다. 자동 백업 tar.gz 파일이 쌓이므로 월드 저장 폴더 안에 두지 마세요.']
+        ].map(([key, label, placeholder, help], index) => `
+            <div class="form-group ${index ? 'mt-sm' : ''}">
+                <label for="valheimMb-${key}">${label}</label>
+                <input type="text" id="valheimMb-${key}" data-volume-key="${key}" class="text-input" value="${escapeHTML(volume[key])}" placeholder="${placeholder}">
+                <p class="helper-text">${help}</p>
+            </div>`).join('') + '<p class="helper-text">rootless 이미지이므로 세 폴더를 미리 만들고 서버 옵션의 실행 사용자 ID·그룹 ID로 소유자를 맞추세요. 예: mkdir -p valheim/{saves,server,backups} && sudo chown -R 1000:1000 valheim</p>';
+    } else if (state.draft.game === 'valheim') {
         const volume = state.draft.valheimVolume;
         container.innerHTML = `
             <div class="form-group">
@@ -1353,8 +1520,23 @@ function renderTextControl(key, value, placeholder = '') {
     `;
 }
 
+function renderConnectionToggle(key, value, labelOn = '사용', labelOff = '미사용') {
+    return `
+        <div class="toggle-group" role="group">
+            <button type="button" class="toggle-btn ${value ? 'active' : ''}" data-key="${key}" data-val="true" aria-pressed="${value}">${escapeHTML(labelOn)}</button>
+            <button type="button" class="toggle-btn ${!value ? 'active' : ''}" data-key="${key}" data-val="false" aria-pressed="${!value}">${escapeHTML(labelOff)}</button>
+        </div>
+    `;
+}
+
+function connectionLabel(forId, label, env) {
+    return `<label${forId ? ` for="${forId}"` : ''}><span class="option-label">${escapeHTML(label)}</span> <code class="env-chip">${escapeHTML(env)}</code></label>`;
+}
+
 function renderCoreKeeperConnectionSettings(container) {
     const conn = state.draft.coreKeeperConnection;
+    const isArguser = state.draft.coreKeeperCreator === 'arguser';
+    const help = key => renderHelpBlock(`corekeeper.connection.${key}`);
     const platformOptions = [
         { value: '', label: '전체 플랫폼 허용' },
         { value: '1', label: 'Steam만 허용 (1)' },
@@ -1363,55 +1545,67 @@ function renderCoreKeeperConnectionSettings(container) {
         { value: '4', label: 'GOG만 허용 (4)' }
     ];
 
+    const direct = isArguser ? `
+            <div class="form-group form-group-wide">
+                <p class="notice">arguser 이미지는 Steam 릴레이(SDR) 접속만 지원합니다. 포트를 열 필요 없이 Game ID로 접속하며, 직접 IP 접속이 필요하면 escaping 이미지를 선택하세요.</p>
+            </div>
+        ` : `
+            <div class="form-group">
+                <div class="label-row">
+                    ${connectionLabel('', '직접 연결 모드', 'SERVER_PORT')}
+                    ${renderConnectionToggle('directConnection', conn.directConnection, '사용', 'SDR 사용')}
+                </div>
+                ${help('directConnection')}
+
+                ${conn.directConnection ? `
+                    <div class="sub-form-group">
+                        ${connectionLabel('serverIp', '바인드 IP', 'SERVER_IP')}
+                        <input type="text" id="serverIp" data-key="serverIp" value="${escapeHTML(conn.serverIp)}" class="text-input" placeholder="비워두면 0.0.0.0">
+                        ${help('serverIp')}
+
+                        ${connectionLabel('serverPort', '직접 연결 UDP 포트', 'SERVER_PORT')}
+                        ${renderPortControl('serverPort', conn.serverPort)}
+                        ${help('serverPort')}
+
+                        ${connectionLabel('coreKeeperPassword', '접속 비밀번호', 'PASSWORD')}
+                        <input type="password" id="coreKeeperPassword" data-key="password" value="${escapeHTML(conn.password)}" class="text-input" maxlength="28" placeholder="최대 28자">
+                        ${help('password')}
+
+                        ${connectionLabel('allowOnlyPlatform', '허용 플랫폼', 'ALLOW_ONLY_PLATFORM')}
+                        <select id="allowOnlyPlatform" data-key="allowOnlyPlatform" class="text-input connection-select">
+                            ${platformOptions.map(option => `<option value="${option.value}" ${conn.allowOnlyPlatform === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}
+                        </select>
+                        ${help('allowOnlyPlatform')}
+                    </div>
+                ` : '<p class="helper-text">SDR은 Steam 릴레이를 사용하므로 인바운드 포트 매핑이 필요하지 않습니다.</p>'}
+            </div>
+        `;
+
     container.innerHTML = `
         <h2>3. Core Keeper 접속 설정</h2>
         <p class="section-desc">월드 이름과 접속 방식을 설정합니다. 기본 SDR 방식은 포트 개방 없이 Game ID로 접속합니다.</p>
         <div class="form-grid">
             <div class="form-group">
-                <label for="worldName">월드 이름 (WORLD_NAME) ${renderHintIcon('서버에서 사용할 Core Keeper 월드 이름입니다.', '월드 이름')}</label>
+                ${connectionLabel('worldName', '월드 이름', 'WORLD_NAME')}
                 <input type="text" id="worldName" data-key="worldName" value="${escapeHTML(conn.worldName)}" class="text-input" placeholder="Core Keeper Server">
+                ${help('worldName')}
             </div>
 
             <div class="form-group">
-                <label for="gameId">고정 Game ID (GAME_ID) ${renderHintIcon('15~28자의 영숫자 ID입니다. 비워두면 최초 실행 시 자동 생성됩니다.', 'Game ID')}</label>
+                ${connectionLabel('gameId', '고정 Game ID', 'GAME_ID')}
                 <input type="text" id="gameId" data-key="gameId" value="${escapeHTML(conn.gameId)}" class="text-input" maxlength="28" placeholder="비워두면 자동 생성">
+                ${help('gameId')}
                 <p class="helper-text">자동 생성된 ID는 컨테이너의 GameID.txt 또는 로그에서 확인할 수 있습니다.</p>
             </div>
 
             <div class="form-group">
-                <label for="maxPlayers">최대 플레이어 수 (MAX_PLAYERS)</label>
+                ${connectionLabel('maxPlayers', '최대 플레이어 수', 'MAX_PLAYERS')}
                 <input type="number" id="maxPlayers" data-key="maxPlayers" class="text-input connection-number" min="1" max="100" step="1" value="${escapeHTML(String(conn.maxPlayers))}">
+                ${help('maxPlayers')}
             </div>
 
             <div class="form-divider"></div>
-
-            <div class="form-group">
-                <div class="label-row">
-                    <label>직접 연결 모드 (SERVER_PORT) ${renderHintIcon('활성화하면 SDR 대신 IP와 UDP 포트로 직접 접속하며, 라우터와 방화벽에서 포트를 열어야 합니다.', '직접 연결 모드')}</label>
-                    <div class="toggle-group" role="group" aria-label="직접 연결 모드">
-                        <button type="button" class="toggle-btn ${conn.directConnection ? 'active' : ''}" data-key="directConnection" data-val="true" aria-pressed="${conn.directConnection}">사용</button>
-                        <button type="button" class="toggle-btn ${!conn.directConnection ? 'active' : ''}" data-key="directConnection" data-val="false" aria-pressed="${!conn.directConnection}">SDR 사용</button>
-                    </div>
-                </div>
-
-                ${conn.directConnection ? `
-                    <div class="sub-form-group">
-                        <label for="serverIp">바인드 IP (SERVER_IP)</label>
-                        <input type="text" id="serverIp" data-key="serverIp" value="${escapeHTML(conn.serverIp)}" class="text-input" placeholder="비워두면 0.0.0.0">
-
-                        <label for="serverPort" class="mt-sm">직접 연결 UDP 포트 (SERVER_PORT)</label>
-                        ${renderPortControl('serverPort', conn.serverPort)}
-
-                        <label for="coreKeeperPassword" class="mt-sm">접속 비밀번호 (PASSWORD)</label>
-                        <input type="password" id="coreKeeperPassword" data-key="password" value="${escapeHTML(conn.password)}" class="text-input" maxlength="28" placeholder="최대 28자">
-
-                        <label for="allowOnlyPlatform" class="mt-sm">허용 플랫폼 (ALLOW_ONLY_PLATFORM)</label>
-                        <select id="allowOnlyPlatform" data-key="allowOnlyPlatform" class="text-input connection-select">
-                            ${platformOptions.map(option => `<option value="${option.value}" ${conn.allowOnlyPlatform === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}
-                        </select>
-                    </div>
-                ` : '<p class="helper-text">SDR은 Steam 릴레이를 사용하므로 인바운드 포트 매핑이 필요하지 않습니다.</p>'}
-            </div>
+            ${direct}
         </div>
         <div class="action-bar" id="action-connection"></div>
     `;
@@ -1422,45 +1616,60 @@ function renderCoreKeeperConnectionSettings(container) {
 
 function renderValheimConnectionSettings(container) {
     const conn = state.draft.valheimConnection;
+    const isMb = state.draft.valheimCreator === 'mbround18';
+    const help = key => renderHelpBlock(`valheim.connection.${key}`, {}, isMb ? VALHEIM_MB_CONNECTION_NOTES[key] || '' : '');
+    const env = isMb
+        ? { serverName: 'NAME', worldName: 'WORLD', serverPassword: 'PASSWORD', serverPort: 'PORT', serverPublic: 'PUBLIC', crossplay: 'ENABLE_CROSSPLAY' }
+        : { serverName: 'SERVER_NAME', worldName: 'WORLD_NAME', serverPassword: 'SERVER_PASS', serverPort: 'SERVER_PORT', serverPublic: 'SERVER_PUBLIC', crossplay: 'CROSSPLAY' };
+    const portsText = isMb
+        ? `시작 포트부터 3개(${conn.serverPort}~${conn.serverPort + 2}/UDP)를 항상 엽니다.`
+        : `시작 포트와 다음 포트(${conn.serverPort}~${conn.serverPort + (conn.crossplay ? 2 : 1)}/UDP)를 엽니다. 크로스플레이를 켜면 세 번째 포트도 포함합니다.`;
     container.innerHTML = `
         <h2>3. Valheim 접속 설정</h2>
-        <p class="section-desc">서버 이름과 월드, 접속 비밀번호를 입력하고 적용하세요. 비밀번호는 5자 이상이어야 합니다. 비밀번호 파일도 사용할 수 있습니다.</p>
+        <p class="section-desc">서버 이름과 월드, 접속 비밀번호를 입력하고 적용하세요. 비밀번호는 5자 이상이어야 합니다.${isMb ? '' : ' 비밀번호 파일도 사용할 수 있습니다.'}</p>
         <div class="form-grid">
             <div class="form-group">
-                <label for="valheimServerName">서버 이름 (SERVER_NAME)</label>
+                ${connectionLabel('valheimServerName', '서버 이름', env.serverName)}
                 <input type="text" id="valheimServerName" data-key="serverName" value="${escapeHTML(conn.serverName)}" class="text-input" placeholder="Valheim Server" required>
+                ${help('serverName')}
             </div>
             <div class="form-group">
-                <label for="valheimWorldName">월드 이름 (WORLD_NAME)</label>
+                ${connectionLabel('valheimWorldName', '월드 이름', env.worldName)}
                 <input type="text" id="valheimWorldName" data-key="worldName" value="${escapeHTML(conn.worldName)}" class="text-input" placeholder="Dedicated" required>
-                <p class="helper-text">기존 월드는 worlds_local 안의 월드 이름과 일치시켜 주세요. 이전 형식의 세이브는 .db/.fwl 확장자를 제외한 이름입니다.</p>
+                ${help('worldName')}
             </div>
             <div class="form-group">
-                <label for="valheimServerPassword">접속 비밀번호 (SERVER_PASS)</label>
+                ${connectionLabel('valheimServerPassword', '접속 비밀번호', env.serverPassword)}
                 <input type="password" id="valheimServerPassword" data-key="serverPassword" value="${escapeHTML(conn.serverPassword)}" class="text-input" minlength="5" autocomplete="new-password" placeholder="5자 이상 입력" required>
+                ${help('serverPassword')}
             </div>
+            ${isMb ? '' : `
             <div class="form-group">
-                <label for="valheimServerSecretFile">접속 비밀번호 파일 (SERVER_PASS_FILE)</label>
+                ${connectionLabel('valheimServerSecretFile', '접속 비밀번호 파일', 'SERVER_PASS_FILE')}
                 <input type="text" id="valheimServerSecretFile" data-key="serverSecretFile" value="${escapeHTML(conn.serverSecretFile)}" class="text-input" placeholder="예: ./secrets/server_pass.txt">
-                <p class="helper-text">선택 사항. Docker 호스트의 파일을 Compose secret으로 연결하며 직접 입력한 비밀번호보다 우선합니다. 파일 내용은 5자 이상이어야 합니다. 생성기가 이 파일을 만들거나 실행 묶음에 포함하지 않으므로 서버에 직접 준비하세요.</p>
-            </div>
+                ${help('serverSecretFile')}
+                <p class="helper-text">선택 사항. 생성기가 이 파일을 만들거나 실행 묶음에 포함하지 않으므로 서버에 직접 준비하세요.</p>
+            </div>`}
             <div class="form-group">
-                <label for="valheimServerPort">시작 UDP 포트 (SERVER_PORT)</label>
+                ${connectionLabel('valheimServerPort', '시작 UDP 포트', env.serverPort)}
                 <input type="number" id="valheimServerPort" data-key="serverPort" value="${escapeHTML(String(conn.serverPort))}" class="text-input connection-number" min="1024" max="65533" step="1">
-                <p class="helper-text">시작 포트와 다음 포트를 함께 사용합니다. 크로스플레이를 켜면 세 번째 포트도 포함합니다.</p>
+                ${help('serverPort')}
+                <p class="helper-text">${escapeHTML(portsText)}</p>
             </div>
             <div class="form-group">
-                <div class="label-row"><label>서버 목록 공개 (SERVER_PUBLIC)</label>
+                <div class="label-row">${connectionLabel('', '서버 목록 공개', env.serverPublic)}
                     ${renderBooleanControl('serverPublic', conn.serverPublic, '공개', '비공개')}
                 </div>
+                ${help('serverPublic')}
             </div>
             <div class="form-group">
-                <div class="label-row"><label>크로스플레이 (CROSSPLAY)</label>
+                <div class="label-row">${connectionLabel('', '크로스플레이', env.crossplay)}
                     ${renderBooleanControl('crossplay', conn.crossplay)}
                 </div>
+                ${help('crossplay')}
                 <p class="helper-text">${conn.crossplay
                     ? 'PlayFab을 통해 Steam·Xbox·Microsoft Store 등의 클라이언트가 접속합니다. LAN IP 접속은 지원하지 않으므로 참가 코드를 사용하세요.'
-                    : 'Steam 전용입니다. 외부 접속에는 시작 포트와 다음 UDP 포트의 방화벽·포트포워딩 설정이 필요합니다.'}</p>
+                    : 'Steam 전용입니다. 외부 접속에는 위 UDP 포트의 방화벽·포트포워딩 설정이 필요합니다.'}</p>
             </div>
         </div>
         <div class="action-bar" id="action-connection"></div>
@@ -1468,6 +1677,12 @@ function renderValheimConnectionSettings(container) {
     container.classList.remove('placeholder-section');
     updateActionBars();
 }
+
+const VALHEIM_MB_CONNECTION_NOTES = {
+    serverPort: 'mbround18 이미지는 크로스플레이 여부와 관계없이 시작 포트+2까지 3개의 UDP 포트를 사용합니다.',
+    serverPublic: 'mbround18 이미지에서는 PUBLIC=1/0으로 전달합니다. 접속자 없을 때 백업 생략 기능은 공개 서버에서만 동작합니다.',
+    crossplay: 'mbround18 이미지에서는 ENABLE_CROSSPLAY=1/0으로 전달합니다.'
+};
 
 function renderConnectionSettings() {
     const container = document.getElementById('section-connection');
@@ -1482,71 +1697,73 @@ function renderConnectionSettings() {
 
     const conn = state.draft.connection;
     const isThijs = state.draft.creator === 'thijsvanloef';
+    const help = key => renderHelpBlock(`palworld.connection.${key}`);
 
     container.innerHTML = `
         <h2>3. Palworld 접속 설정</h2>
         <p class="section-desc">서버 이름, 비밀번호 및 포트 정보를 설정합니다.</p>
-        
+
         <div class="form-grid">
             <div class="form-group">
-                <label for="serverName">서버 이름 (SERVER_NAME) ${renderHintIcon('서버 목록에 표시될 이름입니다.', '서버 이름')}</label>
+                ${connectionLabel('serverName', '서버 이름', 'SERVER_NAME')}
                 <input type="text" id="serverName" data-key="serverName" value="${escapeHTML(conn.serverName)}" class="text-input" placeholder="서버 이름을 입력하세요">
+                ${help('serverName')}
             </div>
 
             <div class="form-group">
-                <label for="serverPassword">서버 접속 비밀번호 (SERVER_PASSWORD) ${renderHintIcon('서버에 접속할 때 필요한 비밀번호입니다. 비워두면 공개 서버가 됩니다.', '서버 접속 비밀번호')}</label>
-                <input type="password" id="serverPassword" data-key="serverPassword" value="${escapeHTML(conn.serverPassword)}" class="text-input" placeholder="접속시 필요한 비밀번호">
-                <p class="helper-text">비워두면 비밀번호 없이 접속 가능합니다.</p>
+                ${connectionLabel('serverPassword', '서버 접속 비밀번호', 'SERVER_PASSWORD')}
+                <input type="password" id="serverPassword" data-key="serverPassword" value="${escapeHTML(conn.serverPassword)}" class="text-input" placeholder="비워두면 비밀번호 없이 접속">
+                ${help('serverPassword')}
             </div>
 
             <div class="form-group">
-                <label for="adminPassword">관리자 비밀번호 (ADMIN_PASSWORD) ${renderHintIcon('인게임에서 /AdminPassword 명령어로 관리자 권한을 얻거나 RCON 접속에 사용됩니다.', '관리자 비밀번호')}</label>
-                <input type="password" id="adminPassword" data-key="adminPassword" value="${escapeHTML(conn.adminPassword)}" class="text-input" placeholder="인게임 관리자 비밀번호">
-                <p class="helper-text">RCON 등 관리자 권한 획득에 사용됩니다.</p>
+                ${connectionLabel('adminPassword', '관리자 비밀번호', 'ADMIN_PASSWORD')}
+                <input type="password" id="adminPassword" data-key="adminPassword" value="${escapeHTML(conn.adminPassword)}" class="text-input" placeholder="인게임 관리자·RCON 비밀번호">
+                ${help('adminPassword')}
             </div>
 
             <div class="form-divider"></div>
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>외부 접속 정보 (${isThijs ? 'PUBLIC_IP / PUBLIC_PORT' : 'PUBLIC_IP'}) ${renderHintIcon('공인 IP를 통해 외부에서 접속할 수 있도록 설정합니다.', '외부 접속 정보')}</label>
-                    <div class="toggle-group" role="group" aria-label="외부 접속 활성화">
-                        <button type="button" class="toggle-btn ${conn.publicConnection ? 'active' : ''}" data-key="publicConnection" data-val="true" aria-pressed="${conn.publicConnection}">사용</button>
-                        <button type="button" class="toggle-btn ${!conn.publicConnection ? 'active' : ''}" data-key="publicConnection" data-val="false" aria-pressed="${!conn.publicConnection}">미사용</button>
-                    </div>
+                    ${connectionLabel('', '외부 접속 정보', isThijs ? 'PUBLIC_IP / PUBLIC_PORT' : 'PUBLIC_IP')}
+                    ${renderConnectionToggle('publicConnection', conn.publicConnection)}
                 </div>
+                ${help('publicConnection')}
                 ${conn.publicConnection ? `
                 <div class="sub-form-group">
-                    <label for="publicIp">공인 IP (PUBLIC_IP) ${renderHintIcon('외부 접속용 공인 IP 주소입니다.', '공인 IP')}</label>
+                    ${connectionLabel('publicIp', '공인 IP', 'PUBLIC_IP')}
                     <input type="text" id="publicIp" data-key="publicIp" value="${escapeHTML(conn.publicIp)}" class="text-input" placeholder="예: 123.45.67.89">
+                    ${help('publicIp')}
 
                     ${isThijs ? `
-                    <label for="publicPort" class="mt-sm">공인 포트 (PUBLIC_PORT) ${renderHintIcon('외부에서 접속할 때 사용하는 포트 번호입니다.', '공인 포트')}</label>
+                    ${connectionLabel('publicPort', '공인 포트', 'PUBLIC_PORT')}
                     ${renderPortControl('publicPort', conn.publicPort)}
-                    ` : `<p class="helper-text">Jammsen의 PUBLIC_PORT는 위 게임 포트(PUBLIC_PORT) 필드에서 설정됩니다.</p>`}
+                    ${help('publicPort')}
+                    ` : `<p class="helper-text">jammsen 이미지의 PUBLIC_PORT는 아래 게임 포트 필드에서 설정됩니다.</p>`}
                 </div>
                 ` : ''}
             </div>
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>커뮤니티 서버 노출 (${isThijs ? 'COMMUNITY' : 'COMMUNITY_SERVER'}) ${renderHintIcon('공식 커뮤니티 서버 목록에 이 서버를 표시할지 여부입니다.', '커뮤니티 서버 노출')}</label>
-                    <div class="toggle-group" role="group" aria-label="커뮤니티 서버 노출">
-                        <button type="button" class="toggle-btn ${conn.community ? 'active' : ''}" data-key="community" data-val="true" aria-pressed="${conn.community}">노출</button>
-                        <button type="button" class="toggle-btn ${!conn.community ? 'active' : ''}" data-key="community" data-val="false" aria-pressed="${!conn.community}">비노출</button>
-                    </div>
+                    ${connectionLabel('', '커뮤니티 서버 노출', isThijs ? 'COMMUNITY' : 'COMMUNITY_SERVER')}
+                    ${renderConnectionToggle('community', conn.community, '노출', '비노출')}
                 </div>
+                ${help('community')}
             </div>
 
             <div class="form-group">
-                <label for="gamePort">게임 포트 (${isThijs ? 'PORT' : 'PUBLIC_PORT'}) ${renderHintIcon('게임 클라이언트가 접속하는 기본 UDP 포트입니다.', '게임 포트')}</label>
+                ${connectionLabel('gamePort', '게임 포트', isThijs ? 'PORT' : 'PUBLIC_PORT')}
                 ${renderPortControl('gamePort', conn.gamePort)}
+                ${help('gamePort')}
             </div>
-            
+
             ${isThijs ? `
             <div class="form-group">
-                <label for="queryPort">쿼리 포트 (QUERY_PORT) ${renderHintIcon('서버 상태 조회용 UDP 쿼리 포트입니다.', '쿼리 포트')}</label>
+                ${connectionLabel('queryPort', '쿼리 포트', 'QUERY_PORT')}
                 ${renderPortControl('queryPort', conn.queryPort)}
+                ${help('queryPort')}
             </div>
             ` : ''}
 
@@ -1554,32 +1771,30 @@ function renderConnectionSettings() {
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>REST API 사용 (${isThijs ? 'REST_API_ENABLED' : 'RESTAPI_ENABLED'}) ${renderHintIcon('외부에서 HTTP 요청으로 서버를 관리할 수 있는 REST API 기능을 활성화합니다.', 'REST API 사용')}</label>
-                    <div class="toggle-group" role="group" aria-label="REST API 사용">
-                        <button type="button" class="toggle-btn ${conn.restApi ? 'active' : ''}" data-key="restApi" data-val="true" aria-pressed="${conn.restApi}">사용</button>
-                        <button type="button" class="toggle-btn ${!conn.restApi ? 'active' : ''}" data-key="restApi" data-val="false" aria-pressed="${!conn.restApi}">미사용</button>
-                    </div>
+                    ${connectionLabel('', 'REST API 사용', isThijs ? 'REST_API_ENABLED' : 'RESTAPI_ENABLED')}
+                    ${renderConnectionToggle('restApi', conn.restApi)}
                 </div>
+                ${help('restApi')}
                 ${conn.restApi ? `
                 <div class="sub-form-group">
-                    <label for="restApiPort">REST API 포트 (${isThijs ? 'REST_API_PORT' : 'RESTAPI_PORT'}) ${renderHintIcon('REST API 서비스가 사용할 TCP 포트입니다.', 'REST API 포트')}</label>
+                    ${connectionLabel('restApiPort', 'REST API 포트', isThijs ? 'REST_API_PORT' : 'RESTAPI_PORT')}
                     ${renderPortControl('restApiPort', conn.restApiPort)}
+                    ${help('restApiPort')}
                 </div>
                 ` : ''}
             </div>
 
             <div class="form-group">
                 <div class="label-row">
-                    <label>RCON 사용 (RCON_ENABLED) ${renderHintIcon('RCON 프로토콜을 이용한 원격 서버 관리 기능을 활성화합니다.', 'RCON 사용')}</label>
-                    <div class="toggle-group" role="group" aria-label="RCON 사용">
-                        <button type="button" class="toggle-btn ${conn.rcon ? 'active' : ''}" data-key="rcon" data-val="true" aria-pressed="${conn.rcon}">사용</button>
-                        <button type="button" class="toggle-btn ${!conn.rcon ? 'active' : ''}" data-key="rcon" data-val="false" aria-pressed="${!conn.rcon}">미사용</button>
-                    </div>
+                    ${connectionLabel('', 'RCON 사용', 'RCON_ENABLED')}
+                    ${renderConnectionToggle('rcon', conn.rcon)}
                 </div>
+                ${help('rcon')}
                 ${conn.rcon ? `
                 <div class="sub-form-group">
-                    <label for="rconPort">RCON 포트 (RCON_PORT) ${renderHintIcon('RCON 서비스가 사용할 TCP 포트입니다.', 'RCON 포트')}</label>
+                    ${connectionLabel('rconPort', 'RCON 포트', 'RCON_PORT')}
                     ${renderPortControl('rconPort', conn.rconPort)}
+                    ${help('rconPort')}
                 </div>
                 ` : ''}
             </div>
@@ -1591,110 +1806,171 @@ function renderConnectionSettings() {
     updateActionBars();
 }
 
+const optionFilter = { query: '', changedOnly: false };
+
+function renderOptionsToolbar() {
+    return `
+        <div class="options-toolbar" role="search">
+            <input type="search" id="option-search" class="text-input option-search" placeholder="설정 이름·환경변수·설명으로 검색 (예: 백업, 경험치, PORT)" value="${escapeHTML(optionFilter.query)}" aria-label="서버 옵션 검색">
+            <label class="toolbar-check"><input type="checkbox" id="option-changed-only" ${optionFilter.changedOnly ? 'checked' : ''}> 기본값에서 바꾼 항목만</label>
+            <span class="toolbar-count" id="option-filter-count" aria-live="polite"></span>
+        </div>
+    `;
+}
+
+function applyOptionFilter() {
+    const container = document.getElementById('section-options');
+    if (!container || typeof container.querySelectorAll !== 'function') return;
+    const terms = optionFilter.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let visible = 0;
+    const rows = Array.from(container.querySelectorAll('.option-row'));
+    rows.forEach(row => {
+        const matches = terms.every(term => row.dataset.search.includes(term)) && (!optionFilter.changedOnly || row.dataset.changed === 'true');
+        row.hidden = !matches;
+        if (matches) visible += 1;
+    });
+    const filtering = terms.length > 0 || optionFilter.changedOnly;
+    container.querySelectorAll('[data-option-group]').forEach(group => {
+        const hasVisible = Array.from(group.querySelectorAll('.option-row')).some(row => !row.hidden);
+        group.hidden = filtering && !hasVisible;
+        if (filtering && hasVisible && group.tagName === 'DETAILS') group.open = true;
+    });
+    const count = document.getElementById('option-filter-count');
+    if (count) count.textContent = filtering ? `${visible} / ${rows.length}개 표시` : `전체 ${rows.length}개 설정`;
+}
+
+function renderOptionGroup(group, rows, { collapsible = false, open = false, extraHtml = '' } = {}) {
+    const content = `<h3 class="subsection-title">${escapeHTML(group.label)}</h3>
+        <p class="helper-text group-help">${escapeHTML(group.help)}</p>
+        <div class="form-grid">${rows}</div>${extraHtml}`;
+    return collapsible
+        ? `<details class="valheim-advanced" data-option-group data-group="${group.key}" ${open ? 'open' : ''}><summary>${escapeHTML(group.label)}</summary>${content}</details>`
+        : `<div class="valheim-option-group" data-option-group>${content}</div>`;
+}
+
+function finishOptionsRender(container) {
+    container.classList.remove('placeholder-section');
+    updateActionBars();
+    applyOptionFilter();
+}
+
 function renderServerOptions() {
     const container = document.getElementById('section-options');
-    if (state.draft.game === 'valheim') {
-        const openGroups = new Set(Array.from(container.querySelectorAll?.('details[data-group][open]') || []).map(element => element.dataset.group));
+    if (!container) return;
+    const openGroups = new Set(Array.from(container.querySelectorAll?.('details[data-group][open]') || []).map(element => element.dataset.group));
+
+    if (state.draft.game === 'valheim' && state.draft.valheimCreator === 'mbround18') {
+        const options = state.draft.valheimMbOptions;
+        const visible = field => (field.key !== 'valheimPlusRelease' || options.type === 'ValheimPlus') &&
+            (!['httpPort', 'httpBind'].includes(field.key) || options.httpEnabled);
         container.innerHTML = `
-            <h2>4. Valheim 서버 옵션</h2>
-            <p class="section-desc">월드 규칙, 저장·운영, 모드와 편의 기능을 설정한 뒤 아래 적용 버튼을 누르세요.</p>
-            ${ValheimSettings.groups.map(group => {
-                const content = `<h3 class="subsection-title">${escapeHTML(group.label)}</h3>
-                    <p class="helper-text">${escapeHTML(group.help)}</p>
-                    <div class="form-grid">${VALHEIM_OPTIONS_SCHEMA.filter(opt => opt.group === group.key).map(opt => renderOptionRow(opt, opt.env, state.draft.valheimOptions[opt.key])).join('')}</div>`;
-                const mods = group.key === 'mods' ? '<div id="section-valheim-qol"></div><div id="section-valheim-mods"></div>' : '';
-                return ['logs', 'hooks', 'advanced'].includes(group.key)
-                    ? `<details class="valheim-advanced" data-group="${group.key}" ${openGroups.has(group.key) ? 'open' : ''}><summary>${escapeHTML(group.label)}</summary>${content}</details>`
-                    : `<div class="valheim-option-group">${content}${mods}</div>`;
-            }).join('')}
+            <h2>4. Valheim 서버 옵션 <span class="title-image">mbround18</span></h2>
+            <p class="section-desc">월드 규칙, 모드, 예약 작업과 알림을 설정한 뒤 아래 적용 버튼을 누르세요. 각 항목의 설명에서 설정 효과를 확인할 수 있습니다.</p>
+            ${renderOptionsToolbar()}
+            ${ValheimMbround.groups.map(group => renderOptionGroup(group, ValheimMbround.fields
+                .filter(field => field.group === group.key && visible(field))
+                .map(field => renderOptionRow(field, field.env, options[field.key], `valheimMb.${field.key}`, { defaultValue: ValheimMbround.defaults[field.key] })).join(''),
+                { collapsible: group.key === 'container', open: openGroups.has(group.key) })).join('')}
+            <div class="action-bar" id="action-options"></div>
+        `;
+        finishOptionsRender(container);
+        return;
+    }
+
+    if (state.draft.game === 'valheim') {
+        container.innerHTML = `
+            <h2>4. Valheim 서버 옵션 <span class="title-image">lloesche</span></h2>
+            <p class="section-desc">월드 규칙, 저장·운영, 모드와 편의 기능을 설정한 뒤 아래 적용 버튼을 누르세요. 각 항목의 설명에서 설정 효과를 확인할 수 있습니다.</p>
+            ${renderOptionsToolbar()}
+            ${ValheimSettings.groups.map(group => renderOptionGroup(group, VALHEIM_OPTIONS_SCHEMA
+                .filter(opt => opt.group === group.key)
+                .map(opt => renderOptionRow(opt, opt.env, state.draft.valheimOptions[opt.key], `valheim.${opt.key}`, { defaultValue: ValheimSettings.defaults[opt.key] })).join(''), {
+                collapsible: ['logs', 'hooks', 'advanced'].includes(group.key),
+                open: openGroups.has(group.key),
+                extraHtml: group.key === 'mods' ? '<div id="section-valheim-qol"></div><div id="section-valheim-mods"></div>' : ''
+            })).join('')}
             <p class="helper-text">비공개 서버의 유휴 판정 값 IDLE_DATAGRAM_WINDOW / MAX_COUNT는 현재 이미지에서 3초 / 30개로 고정되어 환경변수로 바꿀 수 없습니다.</p>
             <div class="action-bar" id="action-options"></div>
         `;
-        container.classList.remove('placeholder-section');
         renderValheimQol();
         renderValheimMods();
-        updateActionBars();
+        finishOptionsRender(container);
         return;
     }
+
     if (state.draft.game === 'corekeeper') {
-        let coreHtml = `
-            <h2>4. Core Keeper 서버 옵션</h2>
-            <p class="section-desc">월드 생성, 컨테이너 권한, ARM 호환성 및 mod.io 모드를 설정합니다.</p>
-            <div class="form-grid">
+        const isArguser = state.draft.coreKeeperCreator === 'arguser';
+        const options = state.draft.coreKeeperOptions;
+        const rows = CORE_KEEPER_OPTIONS_SCHEMA
+            .filter(opt => !isArguser || CORE_KEEPER_ARGUSER_OPTIONS.includes(opt.key))
+            .filter(opt => isArguser || !['modioApiKey', 'modioApiUrl', 'mods'].includes(opt.key) || options.modsEnabled)
+            .map(opt => renderOptionRow(opt, opt.env, options[opt.key], `corekeeper.${opt.key}`, {
+                defaultValue: defaultDraftState.coreKeeperOptions[opt.key],
+                note: isArguser && opt.key === 'worldSeed' ? '비워두면 0을 보내 무작위 시드로 새 월드를 만듭니다.' : ''
+            })).join('');
+        container.innerHTML = `
+            <h2>4. Core Keeper 서버 옵션 <span class="title-image">${isArguser ? 'arguser' : 'escaping'}</span></h2>
+            <p class="section-desc">${isArguser
+                ? 'arguser 이미지는 월드 번호와 시드만 추가로 설정할 수 있습니다. 월드 모드·시즌·모드 지원이 필요하면 escaping 이미지를 선택하세요.'
+                : '월드 생성, 컨테이너 권한, ARM 호환성 및 mod.io 모드를 설정합니다.'}</p>
+            ${isArguser ? '' : renderOptionsToolbar()}
+            <div class="form-grid" data-option-group>${rows}</div>
+            <div class="action-bar" id="action-options"></div>
         `;
-
-        CORE_KEEPER_OPTIONS_SCHEMA.forEach(opt => {
-            if (['modioApiKey', 'modioApiUrl', 'mods'].includes(opt.key) && !state.draft.coreKeeperOptions.modsEnabled) {
-                return;
-            }
-            coreHtml += renderOptionRow(opt, opt.env, state.draft.coreKeeperOptions[opt.key]);
-        });
-
-        coreHtml += `</div><div class="action-bar" id="action-options"></div>`;
-        container.innerHTML = coreHtml;
-        container.classList.remove('placeholder-section');
-        updateActionBars();
+        finishOptionsRender(container);
         return;
     }
 
     const isThijs = state.draft.creator === 'thijsvanloef';
     const creatorKey = isThijs ? 'thijsvanloef' : 'jammsen';
-
-    let html = `
-        <h2>4. Palworld 서버 옵션</h2>
-        <p class="section-desc">게임플레이 상세 설정 및 제작자 전용 운영 옵션을 구성합니다.</p>
-        <div class="form-grid">
-    `;
-
-    html += `<h3 class="subsection-title">공통 게임/컨테이너 설정</h3>`;
-    OPTIONS_SCHEMA.common.forEach(opt => {
-        const envName = isThijs ? opt.envT : opt.envJ;
+    const defaults = defaultDraftState.serverOptions;
+    const palworldRow = (opt, envName, value) => renderOptionRow(opt, envName, value, `palworld.${opt.key}`, {
+        defaultValue: opt.key === 'players' ? (isThijs ? 16 : 32) : defaults[opt.key]
+    });
+    const commonRows = OPTIONS_SCHEMA.common.map(opt => {
         let val = state.draft.serverOptions[opt.key];
-        
-        if (opt.key === 'players' && val === null) {
-            val = isThijs ? 16 : 32;
-        }
+        if (opt.key === 'players' && val === null) val = isThijs ? 16 : 32;
+        return palworldRow(opt, isThijs ? opt.envT : opt.envJ, val);
+    }).join('');
+    const imageRows = OPTIONS_SCHEMA[creatorKey].map(opt => palworldRow(opt, opt.env, state.draft.serverOptions[opt.key])).join('');
 
-        html += renderOptionRow(opt, envName, val);
-    });
-
-    html += `<div class="form-divider" style="margin: var(--spacing-lg) 0;"></div>`;
-
-    html += `<h3 class="subsection-title">${escapeHTML(state.draft.creator)} 전용 운영 설정</h3>`;
-    OPTIONS_SCHEMA[creatorKey].forEach(opt => {
-        const val = state.draft.serverOptions[opt.key];
-        html += renderOptionRow(opt, opt.env, val);
-    });
-
-    html += `</div>
+    container.innerHTML = `
+        <h2>4. Palworld 서버 옵션 <span class="title-image">${escapeHTML(state.draft.creator)}</span></h2>
+        <p class="section-desc">게임플레이 상세 설정과 이미지 전용 운영 옵션을 구성합니다. 각 항목의 설명에서 값을 바꿨을 때의 효과를 확인할 수 있습니다.</p>
+        ${renderOptionsToolbar()}
+        ${renderOptionGroup({ key: 'common', label: '게임플레이·컨테이너 공통 설정', help: '두 이미지 모두 같은 의미로 사용하는 Palworld 월드 설정입니다. 환경변수 이름만 이미지마다 다를 수 있습니다.' }, commonRows)}
+        ${renderOptionGroup({ key: 'image', label: `${state.draft.creator} 전용 운영 설정`, help: '이 이미지에서만 제공하는 업데이트·백업·재시작·로그 기능입니다.' }, imageRows)}
         <div class="action-bar" id="action-options"></div>
     `;
-    container.innerHTML = html;
-    container.classList.remove('placeholder-section');
-    updateActionBars();
+    finishOptionsRender(container);
 }
 
+const CRON_OPTION_KEYS = ['t_autoRebootCronExpression', 't_autoUpdateCronExpression', 'j_backupCronExpression', 'j_restartCronExpression'];
+
 function cronToKorean(cron) {
-    if (!cron || typeof cron !== 'string') return '설정 안 됨';
+    if (!cron || typeof cron !== 'string' || !cron.trim()) return '비어 있음 · 이 예약 작업을 실행하지 않습니다';
     const parts = cron.trim().split(/\s+/);
-    if (parts.length !== 5) return '지원하지 않는 형식이거나 복잡한 Cron 식 (기본 동작 사용)';
-    
+    if (parts.length !== 5) return '형식 오류 · 분 시 일 월 요일 5칸을 공백으로 구분해 입력하세요';
+
     const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
-    
-    if (minute === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-        return '매시간 마다';
-    }
-    if (minute === '0' && !isNaN(hour) && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-        return `매일 ${hour}시 마다`;
-    }
-    if (!isNaN(minute) && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-        return `매시간 ${minute}분 마다`;
-    }
-    if (!isNaN(minute) && !isNaN(hour) && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-        return `매일 ${hour}시 ${minute}분 마다`;
-    }
-    
-    return '사용자 지정 스케줄 (자세한 주기는 직접 확인 필요)';
+    const isNum = value => /^\d+$/.test(value);
+    const every = value => value.match(/^\*\/(\d+)$/)?.[1];
+    const days = ['일', '월', '화', '수', '목', '금', '토', '일'];
+    const anyDate = dayOfMonth === '*' && month === '*';
+
+    let when = '';
+    if (anyDate && dayOfWeek === '*') when = '매일';
+    else if (anyDate && isNum(dayOfWeek) && Number(dayOfWeek) <= 7) when = `매주 ${days[Number(dayOfWeek)]}요일`;
+    else if (isNum(dayOfMonth) && month === '*' && dayOfWeek === '*') when = `매월 ${dayOfMonth}일`;
+    if (!when) return '사용자 지정 스케줄 · crontab.guru 등에서 실행 시점을 확인하세요';
+
+    const prefix = when === '매일' ? '' : `${when} `;
+    if (minute === '*' && hour === '*') return `${prefix}1분마다`;
+    if (every(minute) && hour === '*') return `${prefix}${every(minute)}분마다`;
+    if (isNum(minute) && hour === '*') return `${prefix}매시 ${minute}분`;
+    if (isNum(minute) && every(hour)) return `${when} ${every(hour)}시간마다 (${minute}분)`;
+    if (isNum(minute) && isNum(hour)) return `${when} ${hour}시 ${minute.padStart(2, '0')}분`;
+    return '사용자 지정 스케줄 · crontab.guru 등에서 실행 시점을 확인하세요';
 }
 
 function renderSelectControl(key, value, options) {
@@ -1763,7 +2039,7 @@ function renderCoreKeeperContentBundles(value, activateAllContent) {
     `;
 }
 
-function renderOptionRow(opt, envName, value) {
+function renderOptionRow(opt, envName, value, helpKey = '', extra = {}) {
     let controlHtml = '';
     
     if (opt.type === 'number') {
@@ -1785,12 +2061,11 @@ function renderOptionRow(opt, envName, value) {
     }
 
     let cronPreviewHtml = '';
-    if (['t_autoRebootCronExpression', 't_autoUpdateCronExpression', 'j_backupCronExpression', 'j_restartCronExpression'].includes(opt.key)) {
+    if (opt.cron || CRON_OPTION_KEYS.includes(opt.key)) {
         const koreanPreview = cronToKorean(value);
-        cronPreviewHtml = `<div class="cron-preview-container" style="margin-top: 5px; font-size: 0.9em; color: var(--color-text-muted, #8b949e);">📝 스케줄: <span class="cron-preview-text" id="cron-preview-${opt.key}">${escapeHTML(koreanPreview)}</span></div>`;
+        cronPreviewHtml = `<div class="cron-preview-container">🕒 실행 시점: <span class="cron-preview-text" id="cron-preview-${opt.key}">${escapeHTML(koreanPreview)}</span></div>`;
     }
 
-    const hintText = opt.helper ? opt.helper : `${opt.label} 기능을 설정합니다.`;
     const linksHtml = Array.isArray(opt.links) && opt.links.length > 0
         ? `
             <nav class="option-links" aria-label="${escapeHTML(opt.label)} 관련 링크">
@@ -1802,19 +2077,26 @@ function renderOptionRow(opt, envName, value) {
             </nav>
         `
         : '';
+    const help = getOptionHelp(helpKey, opt);
+    const formatHint = opt.helper && help && help.what !== opt.helper ? `<p class="helper-text">${escapeHTML(opt.helper)}</p>` : '';
+    const hasDefault = Object.hasOwn(extra, 'defaultValue');
+    const changed = hasDefault && !isEqual(value, extra.defaultValue);
+    const searchText = [opt.label, envName, opt.key, help?.what].filter(Boolean).join(' ').toLowerCase();
 
     return `
-        <div class="form-group ${['content-bundles', 'textarea'].includes(opt.type) ? 'form-group-wide' : ''}">
+        <div class="form-group option-row ${['content-bundles', 'textarea'].includes(opt.type) ? 'form-group-wide' : ''} ${changed ? 'is-changed' : ''}" data-search="${escapeHTML(searchText)}" data-changed="${changed}">
             <div class="label-row">
                 <label for="${opt.key}">
-                    ${escapeHTML(opt.label)} (${escapeHTML(envName)})
-                    ${renderHintIcon(hintText, opt.label)}
+                    <span class="option-label">${escapeHTML(opt.label)}</span>
+                    <code class="env-chip">${escapeHTML(envName)}</code>
+                    ${changed ? `<button type="button" class="reset-field" data-reset-key="${escapeHTML(opt.key)}" title="기본값으로 되돌리기">변경됨 · 기본값</button>` : ''}
                 </label>
                 ${opt.type === 'boolean' ? controlHtml : ''}
             </div>
             ${opt.type !== 'boolean' ? controlHtml : ''}
             ${cronPreviewHtml}
-            ${opt.helper ? `<p class="helper-text">${escapeHTML(opt.helper)}</p>` : ''}
+            ${renderHelpBlock(helpKey, opt, extra.note || '')}
+            ${formatHint}
             ${linksHtml}
         </div>
     `;
@@ -1822,7 +2104,7 @@ function renderOptionRow(opt, envName, value) {
 
 function setupConnectionListeners() {
     const container = document.getElementById('section-connection');
-    const getDraftConnection = () => state.draft[GAME_SECTIONS[state.draft.game].connection];
+    const getDraftConnection = () => state.draft[sectionsFor().connection];
     
     container.addEventListener('input', (e) => {
         if (e.target.matches('input[type="text"], input[type="password"]')) {
@@ -1897,8 +2179,39 @@ function setupConnectionListeners() {
 
 function setupOptionsListeners() {
     const container = document.getElementById('section-options');
-    const getDraftOptions = () => state.draft[GAME_SECTIONS[state.draft.game].options];
-    
+    const getDraftOptions = () => state.draft[sectionsFor().options];
+
+    // Search, "changed only" filter and per-field reset sit above the regular option inputs.
+    container.addEventListener('input', (e) => {
+        if (e.target.id === 'option-search') {
+            optionFilter.query = e.target.value;
+            applyOptionFilter();
+        }
+    });
+    container.addEventListener('change', (e) => {
+        if (e.target.id === 'option-changed-only') {
+            optionFilter.changedOnly = e.target.checked;
+            applyOptionFilter();
+        }
+        if (e.target.matches('.option-select') && state.draft.game === 'valheim' && state.draft.valheimCreator === 'mbround18') {
+            renderServerOptions();
+        }
+    });
+    container.addEventListener('click', (e) => {
+        const reset = e.target.closest?.('.reset-field');
+        if (!reset) return;
+        e.preventDefault();
+        const key = reset.dataset.resetKey;
+        const sectionKey = sectionsFor().options;
+        const defaults = sectionKey === 'valheimMbOptions' ? ValheimMbround.defaults
+            : sectionKey === 'valheimOptions' ? ValheimSettings.defaults
+            : defaultDraftState[sectionKey];
+        if (Object.hasOwn(defaults, key)) {
+            getDraftOptions()[key] = clone(defaults[key]);
+            renderServerOptions();
+        }
+    });
+
     container.addEventListener('input', (e) => {
         if (e.target.matches('.option-optional-number')) {
             getDraftOptions()[e.target.dataset.key] = e.target.value === '' ? '' : Number(e.target.value);
@@ -1906,12 +2219,8 @@ function setupOptionsListeners() {
         }
         if (e.target.matches('.option-text')) {
             getDraftOptions()[e.target.dataset.key] = e.target.value;
-            if (['t_autoRebootCronExpression', 't_autoUpdateCronExpression', 'j_backupCronExpression', 'j_restartCronExpression'].includes(e.target.dataset.key)) {
-                const previewSpan = document.getElementById(`cron-preview-${e.target.dataset.key}`);
-                if (previewSpan) {
-                    previewSpan.textContent = cronToKorean(e.target.value);
-                }
-            }
+            const previewSpan = document.getElementById(`cron-preview-${e.target.dataset.key}`);
+            if (previewSpan) previewSpan.textContent = cronToKorean(e.target.value);
             updateActionBars();
         }
         
@@ -2002,7 +2311,35 @@ function yamlDoubleQuoted(str) {
     return '"' + escaped + '"';
 }
 
+function buildArguserCoreKeeperComposeYaml(applied) {
+    const conn = applied.coreKeeperConnection;
+    const opts = applied.coreKeeperOptions;
+    const volume = applied.coreKeeperVolume;
+    let yaml = `services:
+  core-keeper:
+    image: ${ImageCatalog.imageRef('corekeeper', 'arguser')}
+    container_name: core-keeper-dedicated
+    restart: unless-stopped
+    stop_grace_period: 2m
+    volumes:
+      - ${yamlDoubleQuoted(`${volume.filesPath || './core-keeper-files'}:/home/steam/core-keeper-dedicated`)}
+      - ${yamlDoubleQuoted(`${volume.dataPath || './core-keeper-data'}:/home/steam/core-keeper-data`)}
+    environment:
+`;
+    const addEnv = (key, value) => {
+        yaml += typeof value === 'number' ? `      - ${key}=${value}\n` : `      - ${yamlDoubleQuoted(`${key}=${value}`)}\n`;
+    };
+    addEnv('WORLD_INDEX', opts.worldIndex);
+    addEnv('WORLD_NAME', conn.worldName);
+    // This image passes WORLD_SEED straight to -worldseed; 0 asks the game for a random seed.
+    addEnv('WORLD_SEED', opts.worldSeed || '0');
+    addEnv('GAME_ID', conn.gameId);
+    addEnv('MAX_PLAYERS', conn.maxPlayers);
+    return yaml;
+}
+
 function buildCoreKeeperComposeYaml(applied) {
+    if (applied.coreKeeperCreator === 'arguser') return buildArguserCoreKeeperComposeYaml(applied);
     const conn = applied.coreKeeperConnection;
     const opts = applied.coreKeeperOptions;
     const volume = applied.coreKeeperVolume;
@@ -2069,7 +2406,61 @@ function buildCoreKeeperComposeYaml(applied) {
     return yaml;
 }
 
+function validateValheimConnection(conn, { allowSecretFile = true, passwordDisabled = false } = {}) {
+    const errors = [];
+    if (typeof conn.serverName !== 'string' || !conn.serverName.trim()) errors.push('서버 이름을 입력하세요.');
+    if (typeof conn.worldName !== 'string' || !conn.worldName.trim()) errors.push('월드 이름을 입력하세요.');
+    const hasSecretFile = allowSecretFile && typeof conn.serverSecretFile === 'string' && conn.serverSecretFile.trim();
+    if (!passwordDisabled && !hasSecretFile && (typeof conn.serverPassword !== 'string' || conn.serverPassword.length < 5)) errors.push('접속 비밀번호를 5자 이상 입력하세요.');
+    if (!Number.isInteger(conn.serverPort) || conn.serverPort < 1024 || conn.serverPort > 65533) {
+        errors.push('시작 UDP 포트는 1024~65533 사이의 정수여야 합니다.');
+    }
+    return errors;
+}
+
+function validateValheimMbSettings(applied) {
+    return [...validateValheimConnection(applied.valheimConnection, { allowSecretFile: false }), ...ValheimMbround.validate(applied.valheimMbOptions)];
+}
+
+function buildValheimMbComposeYaml(applied) {
+    const errors = validateValheimMbSettings(applied);
+    if (errors.length) throw new Error(errors.join(' '));
+    const conn = applied.valheimConnection;
+    const opts = applied.valheimMbOptions;
+    const volume = applied.valheimMbVolume;
+    const quote = value => yamlDoubleQuoted(String(value).replace(/\$/g, () => '$$'));
+    const lastPort = conn.serverPort + 2;
+    let yaml = `services:
+  valheim:
+    image: ${ImageCatalog.imageRef('valheim', 'mbround18')}
+    container_name: valheim-server
+    restart: unless-stopped
+    user: ${quote(`${opts.puid}:${opts.pgid}`)}
+    stop_signal: SIGINT
+    stop_grace_period: 2m
+    ports:
+      - "${conn.serverPort}-${lastPort}:${conn.serverPort}-${lastPort}/udp"
+`;
+    if (opts.httpEnabled) yaml += `      - ${quote(`${opts.httpBind}:${opts.httpPort}:${opts.httpPort}/tcp`)}\n`;
+    yaml += `    volumes:
+      - ${quote(`${volume.savesPath || './valheim/saves'}:/home/steam/.config/unity3d/IronGate/Valheim`)}
+      - ${quote(`${volume.serverPath || './valheim/server'}:/home/steam/valheim`)}
+      - ${quote(`${volume.backupsPath || './valheim/backups'}:/home/steam/backups`)}
+    environment:
+`;
+    const addEnv = (key, value) => { yaml += `      - ${quote(`${key}=${value}`)}\n`; };
+    addEnv('PORT', conn.serverPort);
+    addEnv('NAME', conn.serverName);
+    addEnv('WORLD', conn.worldName);
+    addEnv('PASSWORD', conn.serverPassword);
+    addEnv('PUBLIC', conn.serverPublic ? 1 : 0);
+    addEnv('ENABLE_CROSSPLAY', conn.crossplay ? 1 : 0);
+    for (const [key, value] of Object.entries(ValheimMbround.environment(opts))) addEnv(key, value);
+    return yaml;
+}
+
 function validateValheimSettings(applied, uploadedFiles) {
+    if (applied.valheimCreator === 'mbround18') return validateValheimMbSettings(applied);
     const conn = applied.valheimConnection;
     const errors = [];
     if (typeof conn.serverName !== 'string' || !conn.serverName.trim()) errors.push('서버 이름을 입력하세요.');
@@ -2162,7 +2553,8 @@ function generateComposeYaml() {
     if (bundleHelp) bundleHelp.hidden = !needsBundle;
     if (applied.game === 'valheim') {
         const output = document.getElementById('yml-output');
-        if (output) output.textContent = errors.length ? '' : buildValheimComposeYaml(applied);
+        if (output) output.textContent = errors.length ? '' : (applied.valheimCreator === 'mbround18' ? buildValheimMbComposeYaml(applied) : buildValheimComposeYaml(applied));
+        paintYamlOutput();
         return;
     }
     if (applied.game === 'corekeeper') {
@@ -2171,14 +2563,14 @@ function generateComposeYaml() {
         if (coreKeeperOutput) {
             coreKeeperOutput.textContent = coreKeeperYaml;
         }
+        paintYamlOutput();
         return;
     }
 
     const isThijs = applied.creator === 'thijsvanloef';
-    const image = isThijs ? 'thijsvanloef/palworld-server-docker:latest' : 'jammsen/palworld-dedicated-server:latest';
-    
-    let yaml = `version: '3.9'
-services:
+    const image = ImageCatalog.imageRef('palworld', applied.creator);
+
+    let yaml = `services:
   palworld:
     image: ${image}
     container_name: palworld-server
@@ -2266,6 +2658,24 @@ services:
     if (outElem) {
         outElem.textContent = yaml;
     }
+    paintYamlOutput();
+}
+
+// Colours the preview in the real DOM; textContent (used for download/copy) stays plain YAML.
+function paintYamlOutput() {
+    const output = document.getElementById('yml-output');
+    const meta = document.getElementById('yml-meta');
+    if (!output) return;
+    const text = output.textContent || '';
+    if (meta) meta.textContent = text ? `${text.trimEnd().split('\n').length}줄 · ${state.applied.game === 'palworld' ? 'Palworld' : state.applied.game === 'corekeeper' ? 'Core Keeper' : 'Valheim'} · ${ImageCatalog.imageRef(state.applied.game, selectedImageId(state.applied))}` : '설정 오류를 고치면 미리보기가 표시됩니다';
+    if (typeof output.querySelector !== 'function') return;
+    output.innerHTML = text.split('\n').map(line => {
+        const match = line.match(/^(\s*)(- )?([A-Za-z_][\w.-]*)(:)(.*)$/);
+        if (match && !match[2]) return `${match[1]}<span class="y-key">${escapeHTML(match[3])}</span>${match[4]}<span class="y-val">${escapeHTML(match[5])}</span>`;
+        const item = line.match(/^(\s*- )(.*)$/);
+        if (item) return `${item[1]}<span class="y-item">${escapeHTML(item[2])}</span>`;
+        return escapeHTML(line);
+    }).join('\n');
 }
 
 document.addEventListener('DOMContentLoaded', init);
