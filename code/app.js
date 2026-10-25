@@ -588,18 +588,32 @@ function getOptionHelp(helpKey, opt = {}) {
 
 let helpPanelSeq = 0;
 
+// Help fields are bullet lists (arrays); a plain string counts as one bullet.
+function helpList(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    return value ? [value] : [];
+}
+
+function renderHelpList(value, className = '') {
+    const items = helpList(value);
+    return items.length ? `<ul class="help-bullets ${className}">${items.map(item => `<li>${escapeHTML(item)}</li>`).join('')}</ul>` : '';
+}
+
 function renderHelpBlock(helpKey, opt = {}, note = '') {
     const help = getOptionHelp(helpKey, opt);
     if (!help) return '';
     const panelId = `help-panel-${++helpPanelSeq}`;
+    const section = (term, value) => helpList(value).length
+        ? `<div class="option-help-item"><span class="option-help-term">${term}</span>${renderHelpList(value)}</div>`
+        : '';
     const details = [
-        help.effect ? `<div class="option-help-item"><span class="option-help-term">설정하면 어떻게 되나요?</span><p>${escapeHTML(help.effect)}</p></div>` : '',
-        help.tip ? `<div class="option-help-item"><span class="option-help-term">추천 · 주의</span><p>${escapeHTML(help.tip)}</p></div>` : '',
-        note ? `<div class="option-help-item"><span class="option-help-term">이 이미지에서</span><p>${escapeHTML(note)}</p></div>` : ''
+        section('설정 효과', help.effect),
+        section('추천 · 주의', help.tip),
+        section('이 이미지에서', note)
     ].join('');
     return `
         <div class="option-help-block">
-            <p class="option-help-what">${escapeHTML(help.what || '')}</p>
+            ${renderHelpList(help.what, 'option-help-what')}
             ${details ? `
                 <button type="button" class="help-toggle" aria-expanded="false" aria-controls="${panelId}">효과·추천 보기</button>
                 <div class="option-help" id="${panelId}">${details}</div>
@@ -2078,10 +2092,10 @@ function renderOptionRow(opt, envName, value, helpKey = '', extra = {}) {
         `
         : '';
     const help = getOptionHelp(helpKey, opt);
-    const formatHint = opt.helper && help && help.what !== opt.helper ? `<p class="helper-text">${escapeHTML(opt.helper)}</p>` : '';
+    const formatHint = opt.helper && help && !helpList(help.what).includes(opt.helper) ? `<p class="helper-text">${escapeHTML(opt.helper)}</p>` : '';
     const hasDefault = Object.hasOwn(extra, 'defaultValue');
     const changed = hasDefault && !isEqual(value, extra.defaultValue);
-    const searchText = [opt.label, envName, opt.key, help?.what].filter(Boolean).join(' ').toLowerCase();
+    const searchText = [opt.label, envName, opt.key, ...helpList(help?.what)].filter(Boolean).join(' ').toLowerCase();
 
     return `
         <div class="form-group option-row ${['content-bundles', 'textarea'].includes(opt.type) ? 'form-group-wide' : ''} ${changed ? 'is-changed' : ''}" data-search="${escapeHTML(searchText)}" data-changed="${changed}">

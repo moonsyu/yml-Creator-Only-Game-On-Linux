@@ -81,18 +81,34 @@ test('every setting in every schema has what/effect help text', () => {
     ...['worldName', 'gameId', 'maxPlayers', 'directConnection', 'serverIp', 'serverPort', 'password', 'allowOnlyPlatform'].map(key => `corekeeper.connection.${key}`),
     ...['serverName', 'worldName', 'serverPassword', 'serverSecretFile', 'serverPort', 'serverPublic', 'crossplay'].map(key => `valheim.connection.${key}`)
   ];
-  const missing = keys.filter(key => !OptionHelp[key] || !OptionHelp[key].what || !OptionHelp[key].effect);
+  const isBulletList = value => Array.isArray(value) && value.length > 0 && value.every(item => typeof item === 'string' && item.trim());
+  const missing = keys.filter(key => !OptionHelp[key] || !isBulletList(OptionHelp[key].what) || !isBulletList(OptionHelp[key].effect));
   assert.deepEqual(missing, []);
-  const mbMissing = ValheimMbround.fields.filter(field => !field.help || !field.help.what || !field.help.effect).map(field => field.key);
+  const mbMissing = ValheimMbround.fields.filter(field => !field.help || !isBulletList(field.help.what) || !isBulletList(field.help.effect)).map(field => field.key);
   assert.deepEqual(mbMissing, []);
+});
+
+test('help text is written as 개조식 bullets, not 서술형 sentences', () => {
+  const entries = [...Object.entries(OptionHelp), ...ValheimMbround.fields.map(field => [`valheimMb.${field.key}`, field.help])];
+  const prose = [];
+  for (const [key, help] of entries) {
+    for (const part of ['what', 'effect', 'tip']) {
+      for (const item of help[part] || []) {
+        // 필요·중요 are nouns; only polite sentence endings count as 서술형.
+        if (/(니다|세요|[어아여해]요|[이예]요)\.?$|\.$/.test(item.trim())) prose.push(`${key}.${part}: ${item}`);
+      }
+    }
+  }
+  assert.deepEqual(prose, []);
 });
 
 test('option rows render the help sentence and an expandable effect panel', () => {
   const { api, elements } = loadApp();
   api.setGame('palworld');
   const html = elements.get('section-options').innerHTML;
-  assert.match(html, new RegExp(OptionHelp['palworld.expRate'].what.slice(0, 12).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(html, /설정하면 어떻게 되나요\?/);
+  assert.match(html, new RegExp(OptionHelp['palworld.expRate'].what[0].slice(0, 10).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(html, /class="help-bullets option-help-what"/);
+  assert.match(html, /설정 효과/);
   assert.match(html, /class="help-toggle"/);
   assert.match(html, /id="option-search"/);
 });
